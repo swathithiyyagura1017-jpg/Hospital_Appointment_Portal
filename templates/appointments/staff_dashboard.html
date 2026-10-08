@@ -1,0 +1,271 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Hospital Staff Management Portal - MediCare{% endblock %}
+
+{% block content %}
+<div class="bg-dark text-white py-4 mb-4 shadow-sm">
+    <div class="container">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+            <div>
+                <span class="badge bg-warning text-dark fw-bold mb-1"><i class="bi bi-shield-lock-fill me-1"></i> Staff Administration</span>
+                <h1 class="h3 fw-bold mb-0">Hospital Operations &amp; Appointment Management</h1>
+                <small class="text-white-50">Oversee doctor schedules, confirm appointments, and manage patient consultation records.</small>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="/admin/" target="_blank" class="btn btn-outline-light btn-sm">
+                    <i class="bi bi-gear-fill me-1"></i> Django Admin
+                </a>
+                <a href="{% url 'book_appointment' %}" class="btn btn-primary btn-sm">
+                    <i class="bi bi-plus-lg me-1"></i> Manual Booking
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container">
+    <!-- Operations KPI Metrics -->
+    <div class="row g-3 mb-4">
+        <div class="col-6 col-md-4 col-lg-2">
+            <div class="card stat-card bg-white p-3 border h-100">
+                <div class="d-flex align-items-center">
+                    <div class="p-2 bg-secondary-subtle text-secondary rounded-3 me-2">
+                        <i class="bi bi-collection-fill fs-5"></i>
+                    </div>
+                    <div>
+                        <div class="text-muted small" style="font-size: 0.75rem;">Total Bookings</div>
+                        <h4 class="fw-bold mb-0 text-dark">{{ total_count }}</h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-4 col-lg-2">
+            <div class="card stat-card bg-white p-3 border h-100">
+                <div class="d-flex align-items-center">
+                    <div class="p-2 bg-warning-subtle text-warning rounded-3 me-2">
+                        <i class="bi bi-hourglass-split fs-5"></i>
+                    </div>
+                    <div>
+                        <div class="text-muted small" style="font-size: 0.75rem;">Pending</div>
+                        <h4 class="fw-bold mb-0 text-warning">{{ pending_count }}</h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-4 col-lg-2">
+            <div class="card stat-card bg-white p-3 border h-100">
+                <div class="d-flex align-items-center">
+                    <div class="p-2 bg-primary-subtle text-primary rounded-3 me-2">
+                        <i class="bi bi-calendar-check-fill fs-5"></i>
+                    </div>
+                    <div>
+                        <div class="text-muted small" style="font-size: 0.75rem;">Confirmed</div>
+                        <h4 class="fw-bold mb-0 text-primary">{{ confirmed_count }}</h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-4 col-lg-2">
+            <div class="card stat-card bg-white p-3 border h-100">
+                <div class="d-flex align-items-center">
+                    <div class="p-2 bg-success-subtle text-success rounded-3 me-2">
+                        <i class="bi bi-check2-all fs-5"></i>
+                    </div>
+                    <div>
+                        <div class="text-muted small" style="font-size: 0.75rem;">Completed</div>
+                        <h4 class="fw-bold mb-0 text-success">{{ completed_count }}</h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-4 col-lg-2">
+            <div class="card stat-card bg-white p-3 border h-100">
+                <div class="d-flex align-items-center">
+                    <div class="p-2 bg-danger-subtle text-danger rounded-3 me-2">
+                        <i class="bi bi-x-circle-fill fs-5"></i>
+                    </div>
+                    <div>
+                        <div class="text-muted small" style="font-size: 0.75rem;">Cancelled</div>
+                        <h4 class="fw-bold mb-0 text-danger">{{ cancelled_count }}</h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-6 col-md-4 col-lg-2">
+            <div class="card stat-card bg-white p-3 border h-100">
+                <div class="d-flex align-items-center">
+                    <div class="p-2 bg-info-subtle text-info rounded-3 me-2">
+                        <i class="bi bi-calendar-day-fill fs-5"></i>
+                    </div>
+                    <div>
+                        <div class="text-muted small" style="font-size: 0.75rem;">Today's Appts</div>
+                        <h4 class="fw-bold mb-0 text-info">{{ today_count }}</h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter & Search Bar -->
+    <div class="card border-0 shadow-sm rounded-4 bg-white p-3 mb-4">
+        <form method="GET" action="{% url 'staff_dashboard' %}" class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label small fw-semibold text-muted">Search Patient / Doctor / Reason</label>
+                <input type="text" name="search" value="{{ search }}" class="form-control form-control-sm" placeholder="Search keyword...">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-semibold text-muted">Filter Status</label>
+                <select name="status" class="form-select form-select-sm">
+                    <option value="">All Statuses</option>
+                    {% for code, label in status_choices %}
+                        <option value="{{ code }}" {% if current_status == code %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-semibold text-muted">Department</label>
+                <select name="department" class="form-select form-select-sm">
+                    <option value="">All Departments</option>
+                    {% for dept in departments %}
+                        <option value="{{ dept }}" {% if current_dept == dept %}selected{% endif %}>{{ dept }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-semibold text-muted">Specific Date</label>
+                <input type="date" name="date" value="{{ current_date }}" class="form-control form-control-sm">
+            </div>
+            <div class="col-md-2 d-flex gap-1">
+                <button type="submit" class="btn btn-primary btn-sm flex-grow-1">Filter</button>
+                <a href="{% url 'staff_dashboard' %}" class="btn btn-outline-secondary btn-sm" title="Clear Filters"><i class="bi bi-arrow-counterclockwise"></i></a>
+            </div>
+        </form>
+    </div>
+
+    <!-- Appointments Management Table -->
+    <div class="card border-0 shadow-sm rounded-4 bg-white overflow-hidden mb-5">
+        <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+            <h5 class="fw-bold mb-0 text-dark">
+                <i class="bi bi-list-task text-primary me-2"></i>Appointments Master Queue
+            </h5>
+            <span class="badge bg-light text-muted border">Total: {{ appointments|length }}</span>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light small">
+                        <tr>
+                            <th>Ref #</th>
+                            <th>Patient Information</th>
+                            <th>Doctor &amp; Dept</th>
+                            <th>Date &amp; Slot</th>
+                            <th>Reason</th>
+                            <th>Current Status</th>
+                            <th>Staff Action</th>
+                            <th class="text-end">Medical Report</th>
+                        </tr>
+                    </thead>
+                    <tbody class="small">
+                        {% for app in appointments %}
+                        <tr>
+                            <td class="fw-bold text-muted">#{{ app.id }}</td>
+                            <td>
+                                <div class="fw-bold text-dark">{{ app.patient.name }}</div>
+                                <div class="text-muted"><i class="bi bi-telephone me-1"></i>{{ app.patient.phone }}</div>
+                                <div class="text-muted"><i class="bi bi-envelope me-1"></i>{{ app.patient.email }}</div>
+                            </td>
+                            <td>
+                                <div class="fw-bold">Dr. {{ app.doctor.name }}</div>
+                                <span class="badge bg-light text-dark border">{{ app.doctor.department }}</span>
+                            </td>
+                            <td>
+                                <div class="fw-semibold text-dark">{{ app.date|date:"Y-m-d" }} ({{ app.date|date:"D" }})</div>
+                                <div class="text-muted">{{ app.get_time_slot_display }}</div>
+                            </td>
+                            <td style="max-width: 200px;">
+                                <div class="text-truncate" title="{{ app.reason }}">{{ app.reason }}</div>
+                            </td>
+                            <td>
+                                <span class="badge 
+                                    {% if app.status == 'Confirmed' %}badge-status-confirmed
+                                    {% elif app.status == 'Pending' %}badge-status-pending
+                                    {% elif app.status == 'Completed' %}badge-status-completed
+                                    {% else %}badge-status-cancelled{% endif %} px-2 py-1">
+                                    {{ app.status }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if app.status == 'Pending' %}
+                                    <div class="d-flex gap-1">
+                                        <form method="POST" action="{% url 'update_appointment_status' app.id %}">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="status" value="Confirmed">
+                                            <button type="submit" class="btn btn-sm btn-success" title="Confirm Appointment">
+                                                <i class="bi bi-check-lg me-1"></i>Confirm
+                                            </button>
+                                        </form>
+                                        <form method="POST" action="{% url 'update_appointment_status' app.id %}" onsubmit="return confirm('Cancel this appointment (#{{ app.id }})?');">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="status" value="Cancelled">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Cancel Appointment">
+                                                <i class="bi bi-x-lg me-1"></i>Cancel
+                                            </button>
+                                        </form>
+                                    </div>
+                                {% elif app.status == 'Confirmed' %}
+                                    <div class="d-flex gap-1">
+                                        <form method="POST" action="{% url 'update_appointment_status' app.id %}">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="status" value="Completed">
+                                            <button type="submit" class="btn btn-sm btn-primary" title="Mark as Completed">
+                                                <i class="bi bi-check2-circle me-1"></i>Complete
+                                            </button>
+                                        </form>
+                                        <form method="POST" action="{% url 'update_appointment_status' app.id %}" onsubmit="return confirm('Cancel this appointment (#{{ app.id }})?');">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="status" value="Cancelled">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Cancel Appointment">
+                                                <i class="bi bi-x-lg me-1"></i>Cancel
+                                            </button>
+                                        </form>
+                                    </div>
+                                {% elif app.status == 'Completed' %}
+                                    <span class="text-success small fw-semibold">
+                                        <i class="bi bi-check-circle-fill me-1"></i>Completed
+                                    </span>
+                                {% elif app.status == 'Cancelled' %}
+                                    <span class="text-muted small">
+                                        <i class="bi bi-slash-circle me-1"></i>Cancelled
+                                    </span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                {% if app.medical_report %}
+                                    <a href="{% url 'medical_report_detail' app.medical_report.id %}" class="btn btn-sm btn-outline-success">
+                                        <i class="bi bi-file-earmark-check me-1"></i> View Report
+                                    </a>
+                                {% elif app.status == 'Completed' or app.status == 'Confirmed' %}
+                                    <a href="{% url 'add_medical_report' app.id %}" class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-plus-circle me-1"></i> Add Report
+                                    </a>
+                                {% else %}
+                                    <span class="text-muted small">N/A</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="8" class="text-center py-5 text-muted">
+                                <i class="bi bi-inbox fs-2 d-block mb-2"></i>
+                                No appointments found matching the selected criteria.
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

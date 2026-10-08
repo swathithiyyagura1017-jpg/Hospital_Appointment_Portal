@@ -1,0 +1,136 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Doctor Directory - MediCare Hospital Portal{% endblock %}
+
+{% block content %}
+<div class="bg-white border-bottom py-4 mb-4">
+    <div class="container">
+        <div class="row align-items-center">
+            <div class="col-md-6">
+                <h1 class="h3 fw-bold mb-1">Doctor Directory</h1>
+                <p class="text-muted mb-0">Browse through our certified healthcare specialists</p>
+            </div>
+            <div class="col-md-6 mt-3 mt-md-0">
+                <!-- Server-side Search Form -->
+                <form method="GET" action="{% url 'doctor_list' %}" class="d-flex gap-2">
+                    <div class="input-group">
+                        <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
+                        <input type="text" name="search" value="{{ search_query }}" class="form-control border-start-0 ps-0" placeholder="Search doctor name or specialization...">
+                        <button class="btn btn-primary" type="submit">Search</button>
+                    </div>
+                    {% if search_query or selected_department %}
+                        <a href="{% url 'doctor_list' %}" class="btn btn-outline-secondary" title="Reset Filters"><i class="bi bi-x-circle"></i></a>
+                    {% endif %}
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container">
+    <!-- Department Quick-Filter Pills (Instant JS + URL query fallback) -->
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4 p-3 bg-white rounded-3 shadow-sm border">
+        <div class="d-flex flex-wrap align-items-center gap-2">
+            <span class="text-muted small fw-semibold me-2"><i class="bi bi-funnel-fill text-primary"></i> Filter Department:</span>
+            <button type="button" class="btn btn-sm btn-outline-secondary dept-pill {% if not selected_department %}active{% endif %}" data-dept="all">
+                All Departments
+            </button>
+            {% for dept in departments %}
+            <button type="button" class="btn btn-sm btn-outline-secondary dept-pill {% if selected_department == dept %}active{% endif %}" data-dept="{{ dept }}">
+                {{ dept }}
+            </button>
+            {% endfor %}
+        </div>
+        <div class="text-muted small">
+            Showing <strong id="visibleDoctorCount" class="text-primary">{{ total_doctors }}</strong> doctors
+        </div>
+    </div>
+
+    <!-- Doctor Cards Grid -->
+    <div class="row g-4" id="doctorsGrid">
+        {% for doctor in doctors %}
+        <div class="col-md-6 col-lg-4 doctor-card-wrapper" data-department="{{ doctor.department }}">
+            <div class="card h-100 doctor-card bg-white">
+                <div class="card-body p-4 d-flex flex-column">
+                    <div class="d-flex align-items-start mb-3">
+                        <div class="doctor-avatar me-3 flex-shrink-0">
+                            {{ doctor.name|slice:":1" }}
+                        </div>
+                        <div class="flex-grow-1">
+                            <span class="badge 
+                                {% if doctor.department == 'Cardiology' %}bg-danger-subtle text-danger border border-danger-subtle
+                                {% elif doctor.department == 'Pediatrics' %}bg-info-subtle text-info border border-info-subtle
+                                {% elif doctor.department == 'Orthopedics' %}bg-warning-subtle text-warning border border-warning-subtle
+                                {% else %}bg-primary-subtle text-primary border border-primary-subtle{% endif %} mb-1">
+                                {{ doctor.department }}
+                            </span>
+                            <h5 class="fw-bold mb-0">Dr. {{ doctor.name }}</h5>
+                            <small class="text-muted">{{ doctor.specialization }}</small>
+                        </div>
+                    </div>
+
+                    <div class="small mb-3 text-secondary">
+                        <div class="mb-1">
+                            <i class="bi bi-briefcase me-2 text-primary"></i><strong>Experience:</strong> {{ doctor.experience_years }} years
+                        </div>
+                        <div class="mb-1">
+                            <i class="bi bi-cash-stack me-2 text-success"></i><strong>Consultation Fee:</strong> ${{ doctor.consultation_fee }}
+                        </div>
+                        <div class="mb-1">
+                            <i class="bi bi-calendar-week me-2 text-info"></i><strong>Available Days:</strong> 
+                            <span class="text-dark">{{ doctor.available_days }}</span>
+                        </div>
+                        <div class="mb-1">
+                            <i class="bi bi-patch-check-fill me-2 {% if doctor.active_status %}text-success{% else %}text-muted{% endif %}"></i><strong>Status:</strong> 
+                            {% if doctor.active_status %}
+                                <span class="badge bg-success-subtle text-success">Active &amp; Available</span>
+                            {% else %}
+                                <span class="badge bg-secondary-subtle text-secondary">Inactive</span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <p class="text-muted small mb-3 flex-grow-1">
+                        {{ doctor.bio|truncatewords:20|default:"Dedicated specialist providing patient-centered healthcare consultations." }}
+                    </p>
+
+                    <div class="border-top pt-3 d-flex gap-2">
+                        {% if doctor.active_status %}
+                            <a href="{% url 'book_appointment' %}?doctor_id={{ doctor.id }}" class="btn btn-primary btn-sm flex-grow-1">
+                                <i class="bi bi-calendar-check me-1"></i> Book Appointment
+                            </a>
+                        {% else %}
+                            <button class="btn btn-secondary btn-sm flex-grow-1" disabled>
+                                Unavailable
+                            </button>
+                        {% endif %}
+                        <a href="{% url 'doctor_detail' doctor.id %}" class="btn btn-outline-secondary btn-sm" title="View Full Profile">
+                            <i class="bi bi-person-lines-fill me-1"></i> View Details
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="col-12 text-center py-5">
+            <div class="p-5 bg-white rounded-4 shadow-sm border">
+                <i class="bi bi-search fs-1 text-muted mb-3 d-block"></i>
+                <h4 class="fw-bold">No Doctors Found</h4>
+                <p class="text-muted">No doctors match your selected criteria. Try resetting filters.</p>
+                <a href="{% url 'doctor_list' %}" class="btn btn-primary">Reset Filters</a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Dynamic JavaScript No Results Message (hidden by default) -->
+    <div id="noDoctorsMessage" class="col-12 text-center py-5 d-none">
+        <div class="p-5 bg-white rounded-4 shadow-sm border">
+            <i class="bi bi-funnel text-muted fs-1 mb-3 d-block"></i>
+            <h4 class="fw-bold">No Doctors in this Department</h4>
+            <p class="text-muted">There are currently no active doctors listed under this filter.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}

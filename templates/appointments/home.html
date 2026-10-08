@@ -1,0 +1,185 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}MediCare - Hospital & Patient Appointment Management Portal{% endblock %}
+
+{% block content %}
+<!-- Hero Section -->
+<section class="hero-section mb-5">
+    <div class="container position-relative" style="z-index: 1;">
+        <div class="row align-items-center">
+            <div class="col-lg-7">
+                <span class="badge bg-primary px-3 py-2 text-uppercase fw-semibold mb-3">
+                    <i class="bi bi-hospital me-1"></i> MediCare Hospital Plaza
+                </span>
+                <h1 class="display-4 fw-bold mb-3">Expert Medical Consultations, Effortlessly Booked</h1>
+                <p class="lead mb-4 text-white-50">
+                    Welcome to MediCare Hospital Plaza's digital appointment management system. Browse certified physicians across Cardiology, Pediatrics, Orthopedics, and Neurology, view real-time slot availability, and book your consultation in seconds.
+                </p>
+                <div class="d-flex flex-wrap gap-3">
+                    <a href="{% url 'book_appointment' %}" class="btn btn-primary btn-lg px-4 shadow">
+                        <i class="bi bi-calendar-check me-2"></i>Book Appointment
+                    </a>
+                    <a href="{% url 'doctor_list' %}" class="btn btn-outline-light btn-lg px-4">
+                        <i class="bi bi-search me-2"></i>Find a Doctor
+                    </a>
+                    {% if user.is_authenticated %}
+                        {% if user.is_staff %}
+                            <a href="{% url 'staff_dashboard' %}" class="btn btn-warning btn-lg px-4 shadow">
+                                <i class="bi bi-speedometer2 me-2"></i>Staff Portal
+                            </a>
+                        {% else %}
+                            <a href="{% url 'patient_dashboard' %}" class="btn btn-info text-white btn-lg px-4 shadow">
+                                <i class="bi bi-person-circle me-2"></i>My Dashboard
+                            </a>
+                        {% endif %}
+                    {% else %}
+                        <a href="{% url 'patient_login' %}" class="btn btn-outline-info btn-lg px-4">
+                            <i class="bi bi-box-arrow-in-right me-2"></i>Sign In
+                        </a>
+                        <a href="{% url 'patient_register' %}" class="btn btn-success btn-lg px-4 shadow">
+                            <i class="bi bi-person-plus-fill me-2"></i>Register
+                        </a>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="col-lg-5 d-none d-lg-block">
+                <div class="card bg-white text-dark shadow-lg border-0 rounded-4 p-4">
+                    <div class="d-flex align-items-center mb-3">
+                        <div class="bg-primary text-white p-3 rounded-circle me-3">
+                            <i class="bi bi-hospital fs-3"></i>
+                        </div>
+                        <div>
+                            <h5 class="mb-0 fw-bold">Live Hospital Stats</h5>
+                            <small class="text-muted">Updated in real-time</small>
+                        </div>
+                    </div>
+                    <ul class="list-group list-group-flush small">
+                        <li class="list-group-item d-flex justify-content-between align-items-center py-3">
+                            <span><i class="bi bi-person-badge-fill text-primary me-2"></i>Active Specialist Doctors</span>
+                            <span class="badge bg-primary rounded-pill fs-6">{{ doctors_count }}</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center py-3">
+                            <span><i class="bi bi-building-check text-success me-2"></i>Specialized Departments</span>
+                            <span class="badge bg-success rounded-pill fs-6">4</span>
+                        </li>
+                        <li class="list-group-item d-flex justify-content-between align-items-center py-3">
+                            <span><i class="bi bi-shield-check text-info me-2"></i>Slot Conflict Prevention</span>
+                            <span class="text-success fw-bold"><i class="bi bi-check2-circle"></i> Active</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<div class="container">
+    <!-- Required Departments Section -->
+    <div class="text-center mb-5">
+        <h6 class="text-primary text-uppercase fw-bold letter-spacing-1">Specialized Care</h6>
+        <h2 class="fw-bold">Our Medical Departments</h2>
+        <p class="text-muted">Expert doctors available across our core medical disciplines</p>
+    </div>
+
+    <div class="row g-4 mb-5">
+        {% for dept in dept_stats %}
+        <div class="col-md-6 col-lg-3">
+            <div class="card h-100 border-0 shadow-sm rounded-4 text-center p-4 hover-lift">
+                <div class="mx-auto mb-3 p-3 rounded-circle d-inline-flex align-items-center justify-content-center"
+                     style="width: 70px; height: 70px; background-color: {% cycle '#eff6ff' '#ecfdf5' '#fffbeb' '#fdf2f8' %};">
+                    {% if dept.code == 'Cardiology' %}
+                        <i class="bi bi-heart-pulse text-danger fs-2"></i>
+                    {% elif dept.code == 'Pediatrics' %}
+                        <i class="bi bi-emoji-smile text-info fs-2"></i>
+                    {% elif dept.code == 'Orthopedics' %}
+                        <i class="bi bi-bandaid text-warning fs-2"></i>
+                    {% else %}
+                        <i class="bi bi-cpu text-primary fs-2"></i>
+                    {% endif %}
+                </div>
+                <h5 class="fw-bold mb-1">{{ dept.name }}</h5>
+                <p class="text-muted small mb-3">{{ dept.count }} Active Specialist{{ dept.count|pluralize }}</p>
+                <a href="{% url 'doctor_list' %}?department={{ dept.code }}" class="btn btn-outline-primary btn-sm rounded-pill mt-auto">
+                    View Doctors <i class="bi bi-arrow-right ms-1"></i>
+                </a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- How It Works Section -->
+    <div class="card border-0 bg-light rounded-4 p-4 p-md-5 mb-5 shadow-sm">
+        <div class="row text-center mb-4">
+            <div class="col-12">
+                <h6 class="text-primary text-uppercase fw-bold">Simple Process</h6>
+                <h2 class="fw-bold">How to Book Your Appointment</h2>
+            </div>
+        </div>
+        <div class="row g-4">
+            <div class="col-md-4 text-center">
+                <div class="bg-white rounded-circle shadow-sm d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
+                    <span class="fs-4 fw-bold text-primary">1</span>
+                </div>
+                <h5 class="fw-bold">Choose Doctor &amp; Department</h5>
+                <p class="text-muted small">Select your preferred specialist doctor based on department and consultation fee.</p>
+            </div>
+            <div class="col-md-4 text-center">
+                <div class="bg-white rounded-circle shadow-sm d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
+                    <span class="fs-4 fw-bold text-primary">2</span>
+                </div>
+                <h5 class="fw-bold">Pick Date &amp; Available Slot</h5>
+                <p class="text-muted small">Inspect real-time slot availability. Double-booking prevention guarantees your appointment slot.</p>
+            </div>
+            <div class="col-md-4 text-center">
+                <div class="bg-white rounded-circle shadow-sm d-inline-flex align-items-center justify-content-center mb-3" style="width: 60px; height: 60px;">
+                    <span class="fs-4 fw-bold text-primary">3</span>
+                </div>
+                <h5 class="fw-bold">Get Instant Confirmation</h5>
+                <p class="text-muted small">Receive your appointment reference and track progress in your personal patient dashboard.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Featured Doctors Carousel / Grid -->
+    <div class="d-flex justify-content-between align-items-end mb-4">
+        <div>
+            <h6 class="text-primary text-uppercase fw-bold">Our Medical Staff</h6>
+            <h2 class="fw-bold mb-0">Featured Doctors</h2>
+        </div>
+        <a href="{% url 'doctor_list' %}" class="btn btn-outline-primary btn-sm">
+            All Doctors <i class="bi bi-arrow-right ms-1"></i>
+        </a>
+    </div>
+
+    <div class="row g-4 mb-5">
+        {% for doc in featured_doctors %}
+        <div class="col-md-6 col-lg-3">
+            <div class="card h-100 doctor-card bg-white">
+                <div class="card-body p-4 text-center d-flex flex-column">
+                    <div class="doctor-avatar mx-auto mb-3">
+                        <i class="bi bi-person-fill"></i>
+                    </div>
+                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle mb-2 align-self-center">
+                        {{ doc.department }}
+                    </span>
+                    <h5 class="fw-bold mb-1">Dr. {{ doc.name }}</h5>
+                    <p class="text-muted small mb-2">{{ doc.specialization }}</p>
+                    <div class="text-success fw-semibold small mb-3">
+                        Fee: ${{ doc.consultation_fee }}
+                    </div>
+                    <div class="mt-auto d-grid gap-2">
+                        <a href="{% url 'book_appointment' %}?doctor_id={{ doc.id }}" class="btn btn-primary btn-sm">
+                            <i class="bi bi-calendar-check me-1"></i> Book Slot
+                        </a>
+                        <a href="{% url 'doctor_detail' doc.id %}" class="btn btn-light btn-sm text-muted">
+                            View Profile
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

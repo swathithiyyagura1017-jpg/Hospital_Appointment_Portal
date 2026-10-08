@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Sign In - MediCare Portal{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6 col-lg-5">
+            <div class="card border-0 shadow-sm rounded-4 p-4 p-md-5 bg-white">
+                <div class="text-center mb-4">
+                    <div class="brand-icon mx-auto mb-2" style="width: 50px; height: 50px;">
+                        <i class="bi bi-box-arrow-in-right fs-4"></i>
+                    </div>
+                    <h3 class="fw-bold mb-1">Sign In</h3>
+                    <p class="text-muted small">Access your patient portal or staff administration</p>
+                </div>
+
+                <form method="POST">
+                    {% csrf_token %}
+                    {% if next %}
+                        <input type="hidden" name="next" value="{{ next }}">
+                    {% endif %}
+
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger py-2 small">
+                            {% for error in form.non_field_errors %}
+                                <div>{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Username</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light"><i class="bi bi-person"></i></span>
+                            <input type="text" name="username" class="form-control" placeholder="Enter username" required autofocus>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label small fw-semibold">Password</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light"><i class="bi bi-lock"></i></span>
+                            <input type="password" name="password" class="form-control" placeholder="Enter password" required>
+                        </div>
+                    </div>
+
+                    <div class="d-grid mb-3">
+                        <button type="submit" class="btn btn-primary py-2 shadow-sm">
+                            <i class="bi bi-box-arrow-in-right me-1"></i> Log In
+                        </button>
+                    </div>
+
+                    <div class="text-center small text-muted">
+                        Don't have a patient account? 
+                        <a href="{% url 'patient_register' %}" class="text-primary fw-semibold">Register here</a>
+                    </div>
+                </form>
+
+                <hr class="my-4">
+
+                <div class="bg-light p-3 rounded-3 small">
+                    <strong class="text-dark d-block mb-1"><i class="bi bi-key-fill text-warning me-1"></i> Demo Credentials:</strong>
+                    <div><span class="text-muted">Staff / Admin:</span> <code>admin</code> / <code>Admin@12345</code></div>
+                    <div><span class="text-muted">Sample Patient:</span> <code>patient_john</code> / <code>Patient@123</code></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

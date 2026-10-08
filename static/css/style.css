@@ -1,0 +1,244 @@
+/* ============================================================
+   Hospital & Patient Appointment Management Portal CSS
+   Bootstrap 5 Theme Enhancements & Custom Styling
+   ============================================================ */
+
+:root {
+    --primary-color: #0d6efd;
+    --primary-dark: #0a58ca;
+    --primary-light: #e7f1ff;
+    --secondary-color: #0891b2;
+    --accent-color: #10b981;
+    --danger-color: #ef4444;
+    --warning-color: #f59e0b;
+    --dark-navy: #0f172a;
+    --text-muted: #64748b;
+    --bg-light: #f8fafc;
+    --card-border: #e2e8f0;
+}
+
+body {
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background-color: var(--bg-light);
+    color: #1e293b;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+main {
+    flex: 1 0 auto;
+}
+
+footer {
+    flex-shrink: 0;
+}
+
+/* Navbar */
+.navbar-brand {
+    font-weight: 700;
+    letter-spacing: -0.5px;
+}
+
+.brand-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    background: linear-gradient(135deg, #0d6efd, #0891b2);
+    color: white;
+    border-radius: 8px;
+    margin-right: 8px;
+}
+
+/* Hero Section */
+.hero-section {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0d6efd 150%);
+    color: white;
+    padding: 4.5rem 0;
+    position: relative;
+    overflow: hidden;
+}
+
+.hero-section::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    background: radial-gradient(circle at 80% 20%, rgba(13, 110, 253, 0.25) 0%, transparent 50%);
+    pointer-events: none;
+}
+
+/* Department Badges & Cards */
+.dept-pill {
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-weight: 500;
+}
+
+.dept-pill:hover,
+.dept-pill.active {
+    background-color: var(--primary-color) !important;
+    color: white !important;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(13, 110, 253, 0.25);
+}
+
+.doctor-card {
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.doctor-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 24px -10px rgba(15, 23, 42, 0.15);
+}
+
+.doctor-avatar {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #e0f2fe, #bae6fd);
+    color: #0369a1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.75rem;
+    font-weight: 600;
+}
+
+/* Status Badges */
+.badge-status-pending {
+    background-color: #fef3c7;
+    color: #92400e;
+    border: 1px solid #fde68a;
+    font-weight: 600;
+}
+
+.badge-status-confirmed {
+    background-color: #e0f2fe;
+    color: #0369a1;
+    border: 1px solid #bae6fd;
+    font-weight: 600;
+}
+
+.badge-status-completed {
+    background-color: #d1fae5;
+    color: #065f46;
+    border: 1px solid #a7f3d0;
+    font-weight: 600;
+}
+
+.badge-status-cancelled {
+    background-color: #fee2e2;
+    color: #991b1b;
+    border: 1px solid #fecaca;
+    font-weight: 600;
+}
+
+/* Slot Selection Grid */
+.slot-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 0.6rem;
+    margin-top: 0.75rem;
+}
+
+.slot-btn {
+    padding: 0.6rem 0.5rem;
+    font-size: 0.85rem;
+    font-weight: 500;
+    border-radius: 8px;
+    border: 1px solid #cbd5e1;
+    background-color: #ffffff;
+    color: #334155;
+    transition: all 0.15s ease-in-out;
+    cursor: pointer;
+    text-align: center;
+    position: relative;
+}
+
+.slot-btn:hover:not(:disabled) {
+    border-color: var(--primary-color);
+    background-color: var(--primary-light);
+    color: var(--primary-dark);
+}
+
+.slot-btn.selected {
+    background-color: var(--primary-color) !important;
+    border-color: var(--primary-color) !important;
+    color: white !important;
+    box-shadow: 0 4px 10px rgba(13, 110, 253, 0.3);
+}
+
+.slot-btn.booked,
+.slot-btn:disabled {
+    background-color: #f1f5f9;
+    color: #94a3b8;
+    border-color: #e2e8f0;
+    cursor: not-allowed;
+    text-decoration: line-through;
+}
+
+.slot-btn.booked::after {
+    content: "Booked";
+    display: block;
+    font-size: 0.65rem;
+    text-decoration: none;
+    color: #ef4444;
+    font-weight: 600;
+    margin-top: 2px;
+}
+
+/* Stat Cards */
+.stat-card {
+    border: none;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    transition: transform 0.2s;
+}
+
+.stat-card:hover {
+    transform: translateY(-2px);
+}
+
+/* Medical Report Slip */
+.report-paper {
+    background-color: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+    padding: 2.5rem;
+    position: relative;
+}
+
+.report-header {
+    border-bottom: 2px solid #0d6efd;
+    padding-bottom: 1.25rem;
+    margin-bottom: 1.5rem;
+}
+
+@media print {
+    body * {
+        visibility: hidden;
+    }
+    .report-paper, .report-paper * {
+        visibility: visible;
+    }
+    .report-paper {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        border: none;
+        box-shadow: none;
+    }
+    .no-print {
+        display: none !important;
+    }
+}

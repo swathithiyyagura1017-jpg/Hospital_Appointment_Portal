@@ -1,0 +1,344 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Patient Dashboard - MediCare Portal{% endblock %}
+
+{% block content %}
+<div class="bg-white border-bottom py-4 mb-4">
+    <div class="container">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+            <div>
+                <span class="badge bg-primary-subtle text-primary border border-primary-subtle mb-1">Patient Portal</span>
+                <h1 class="h3 fw-bold mb-0">Welcome, {{ patient.name }}</h1>
+                <small class="text-muted"><i class="bi bi-person-badge me-1"></i> Patient Account Dashboard</small>
+            </div>
+            <div>
+                <a href="{% url 'book_appointment' %}" class="btn btn-primary shadow-sm">
+                    <i class="bi bi-calendar-plus me-1"></i> Book New Appointment
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container">
+    <!-- Patient Profile Information Card -->
+    <div class="card border-0 shadow-sm rounded-4 bg-white p-4 mb-4">
+        <h5 class="fw-bold text-dark border-bottom pb-2 mb-3">
+            <i class="bi bi-person-lines-fill text-primary me-2"></i>Patient Profile Information
+        </h5>
+        <div class="row g-3 small">
+            <div class="col-md-3 col-sm-6">
+                <span class="text-muted d-block">Full Name</span>
+                <strong class="text-dark fs-6">{{ patient.name }}</strong>
+            </div>
+            <div class="col-md-3 col-sm-6">
+                <span class="text-muted d-block">Email Address</span>
+                <strong class="text-dark">{{ patient.email }}</strong>
+            </div>
+            <div class="col-md-3 col-sm-6">
+                <span class="text-muted d-block">Phone Number</span>
+                <strong class="text-dark">{{ patient.phone|default:"Not provided" }}</strong>
+            </div>
+            <div class="col-md-3 col-sm-6">
+                <span class="text-muted d-block">Gender</span>
+                <strong class="text-dark">{{ patient.gender|default:"Not specified" }}</strong>
+            </div>
+            <div class="col-md-3 col-sm-6">
+                <span class="text-muted d-block">Date of Birth</span>
+                <strong class="text-dark">{{ patient.date_of_birth|date:"M d, Y"|default:"Not specified" }}</strong>
+            </div>
+            <div class="col-md-3 col-sm-6">
+                <span class="text-muted d-block">Blood Group</span>
+                <span class="badge bg-danger-subtle text-danger border border-danger-subtle fw-bold">{{ patient.blood_group|default:"N/A" }}</span>
+            </div>
+            <div class="col-md-6 col-sm-12">
+                <span class="text-muted d-block">Residential Address</span>
+                <span class="text-dark">{{ patient.address|default:"No address on file" }}</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Statistics Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-sm-6 col-lg-3">
+            <div class="card stat-card bg-white p-3 border">
+                <div class="d-flex align-items-center">
+                    <div class="p-3 bg-primary-subtle text-primary rounded-3 me-3">
+                        <i class="bi bi-calendar-check fs-4"></i>
+                    </div>
+                    <div>
+                        <div class="text-muted small">Total Appointments</div>
+                        <h4 class="fw-bold mb-0">{{ total_appointments }}</h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <div class="card stat-card bg-white p-3 border">
+                <div class="d-flex align-items-center">
+                    <div class="p-3 bg-warning-subtle text-warning rounded-3 me-3">
+                        <i class="bi bi-hourglass-split fs-4"></i>
+                    </div>
+                    <div>
+                        <div class="text-muted small">Pending Verification</div>
+                        <h4 class="fw-bold mb-0">{{ pending_count }}</h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <div class="card stat-card bg-white p-3 border">
+                <div class="d-flex align-items-center">
+                    <div class="p-3 bg-info-subtle text-info rounded-3 me-3">
+                        <i class="bi bi-patch-check fs-4"></i>
+                    </div>
+                    <div>
+                        <div class="text-muted small">Confirmed Bookings</div>
+                        <h4 class="fw-bold mb-0">{{ confirmed_count }}</h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+            <div class="card stat-card bg-white p-3 border">
+                <div class="d-flex align-items-center">
+                    <div class="p-3 bg-success-subtle text-success rounded-3 me-3">
+                        <i class="bi bi-file-earmark-medical fs-4"></i>
+                    </div>
+                    <div>
+                        <div class="text-muted small">Completed Consults</div>
+                        <h4 class="fw-bold mb-0">{{ completed_count }}</h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <ul class="nav nav-pills mb-4 gap-2" id="dashboardTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="upcoming-tab" data-bs-toggle="pill" data-bs-target="#upcoming" type="button" role="tab">
+                <i class="bi bi-clock-history me-1"></i> Upcoming Appointments ({{ upcoming_appointments|length }})
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="past-tab" data-bs-toggle="pill" data-bs-target="#past" type="button" role="tab">
+                <i class="bi bi-archive me-1"></i> Past &amp; Completed ({{ past_appointments|length }})
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="reports-tab" data-bs-toggle="pill" data-bs-target="#reports" type="button" role="tab">
+                <i class="bi bi-file-earmark-text me-1"></i> Medical Reports ({{ medical_reports|length }})
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content" id="dashboardTabsContent">
+        <!-- 1. Upcoming Appointments -->
+        <div class="tab-pane fade show active" id="upcoming" role="tabpanel">
+            <div class="card border-0 shadow-sm rounded-4 bg-white overflow-hidden">
+                <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+                    <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-calendar3 text-primary me-2"></i>Upcoming Consultations</h5>
+                    <span class="badge bg-light text-muted border">Active Schedulings</span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Ref #</th>
+                                    <th>Doctor Information</th>
+                                    <th>Department</th>
+                                    <th>Scheduled Date</th>
+                                    <th>Time Slot</th>
+                                    <th>Reason for Visit</th>
+                                    <th>Status</th>
+                                    <th class="text-end">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for app in upcoming_appointments %}
+                                <tr>
+                                    <td class="fw-semibold text-muted">#{{ app.id }}</td>
+                                    <td>
+                                        <div class="fw-bold text-dark">Dr. {{ app.doctor.name }}</div>
+                                        <small class="text-muted">{{ app.doctor.specialization }}</small>
+                                    </td>
+                                    <td>
+                                        <span class="badge 
+                                            {% if app.doctor.department == 'Cardiology' %}bg-danger-subtle text-danger
+                                            {% elif app.doctor.department == 'Pediatrics' %}bg-info-subtle text-info
+                                            {% elif app.doctor.department == 'Orthopedics' %}bg-warning-subtle text-warning
+                                            {% else %}bg-primary-subtle text-primary{% endif %}">
+                                            {{ app.doctor.department }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <strong class="text-dark">{{ app.date|date:"M d, Y" }}</strong>
+                                        <div class="small text-muted">{{ app.date|date:"l" }}</div>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-light text-dark border">{{ app.get_time_slot_display }}</span>
+                                    </td>
+                                    <td style="max-width: 220px;">
+                                        <div class="text-truncate" title="{{ app.reason }}">{{ app.reason }}</div>
+                                    </td>
+                                    <td>
+                                        <span class="badge 
+                                            {% if app.status == 'Confirmed' %}badge-status-confirmed
+                                            {% elif app.status == 'Pending' %}badge-status-pending
+                                            {% elif app.status == 'Completed' %}badge-status-completed
+                                            {% else %}badge-status-cancelled{% endif %} px-2 py-1">
+                                            {{ app.status }}
+                                        </span>
+                                    </td>
+                                    <td class="text-end">
+                                        {% if app.status != 'Cancelled' and app.status != 'Completed' %}
+                                        <form method="POST" action="{% url 'cancel_appointment' app.id %}" class="d-inline" onsubmit="return confirm('Are you sure you want to cancel this appointment (#{{ app.id }})?');">
+                                            {% csrf_token %}
+                                            <button type="submit" class="btn btn-outline-danger btn-sm" title="Cancel Appointment">
+                                                <i class="bi bi-x-circle me-1"></i> Cancel
+                                            </button>
+                                        </form>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="8" class="text-center py-5 text-muted">
+                                        <i class="bi bi-calendar-x fs-2 d-block mb-2"></i>
+                                        No upcoming appointments found.
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. Past Appointments -->
+        <div class="tab-pane fade" id="past" role="tabpanel">
+            <div class="card border-0 shadow-sm rounded-4 bg-white overflow-hidden">
+                <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+                    <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-archive text-secondary me-2"></i>Past Consultation History</h5>
+                    <span class="badge bg-light text-muted border">Completed &amp; Previous</span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Ref #</th>
+                                    <th>Doctor Information</th>
+                                    <th>Department</th>
+                                    <th>Date</th>
+                                    <th>Time Slot</th>
+                                    <th>Reason for Visit</th>
+                                    <th>Status</th>
+                                    <th class="text-end">Medical Report</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for app in past_appointments %}
+                                <tr>
+                                    <td class="fw-semibold text-muted">#{{ app.id }}</td>
+                                    <td>
+                                        <div class="fw-bold text-dark">Dr. {{ app.doctor.name }}</div>
+                                        <small class="text-muted">{{ app.doctor.specialization }}</small>
+                                    </td>
+                                    <td>{{ app.doctor.department }}</td>
+                                    <td>{{ app.date|date:"M d, Y" }}</td>
+                                    <td>
+                                        <span class="badge bg-light text-dark border">{{ app.get_time_slot_display }}</span>
+                                    </td>
+                                    <td style="max-width: 220px;">
+                                        <div class="text-truncate" title="{{ app.reason }}">{{ app.reason }}</div>
+                                    </td>
+                                    <td>
+                                        <span class="badge 
+                                            {% if app.status == 'Confirmed' %}badge-status-confirmed
+                                            {% elif app.status == 'Pending' %}badge-status-pending
+                                            {% elif app.status == 'Completed' %}badge-status-completed
+                                            {% else %}badge-status-cancelled{% endif %} px-2 py-1">
+                                            {{ app.status }}
+                                        </span>
+                                    </td>
+                                    <td class="text-end">
+                                        {% if app.medical_report %}
+                                            <a href="{% url 'medical_report_detail' app.medical_report.id %}" class="btn btn-sm btn-outline-primary">
+                                                <i class="bi bi-file-earmark-medical me-1"></i> View Report
+                                            </a>
+                                        {% else %}
+                                            <span class="text-muted small">None available</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="8" class="text-center py-5 text-muted">
+                                        <i class="bi bi-journal-x fs-2 d-block mb-2"></i>
+                                        No past appointments on record.
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. Medical Reports -->
+        <div class="tab-pane fade" id="reports" role="tabpanel">
+            <div class="card border-0 shadow-sm rounded-4 bg-white overflow-hidden">
+                <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+                    <h5 class="fw-bold mb-0 text-dark"><i class="bi bi-file-earmark-medical text-success me-2"></i>Medical Consultation Reports</h5>
+                    <span class="badge bg-light text-muted border">Official Records</span>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Report #</th>
+                                    <th>Consultant Doctor</th>
+                                    <th>Department</th>
+                                    <th>Date</th>
+                                    <th>Diagnosis Summary</th>
+                                    <th class="text-end">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for rep in medical_reports %}
+                                <tr>
+                                    <td class="fw-semibold text-muted">#REP-{{ rep.id }}</td>
+                                    <td>Dr. {{ rep.doctor.name }}</td>
+                                    <td>{{ rep.doctor.department }}</td>
+                                    <td>{{ rep.report_date|date:"M d, Y" }}</td>
+                                    <td><span class="fw-semibold text-dark">{{ rep.diagnosis|truncatewords:10 }}</span></td>
+                                    <td class="text-end">
+                                        <a href="{% url 'medical_report_detail' rep.id %}" class="btn btn-sm btn-primary">
+                                            <i class="bi bi-eye me-1"></i> View &amp; Print
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="6" class="text-center py-5 text-muted">
+                                        <i class="bi bi-file-earmark-x fs-2 d-block mb-2"></i>
+                                        No medical consultation reports generated yet.
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

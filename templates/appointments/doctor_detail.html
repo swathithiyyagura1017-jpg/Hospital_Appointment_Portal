@@ -1,0 +1,107 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Dr. {{ doctor.name }} - MediCare Hospital Portal{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <!-- Breadcrumb -->
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
+            <li class="breadcrumb-item"><a href="{% url 'doctor_list' %}">Doctors</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Dr. {{ doctor.name }}</li>
+        </ol>
+    </nav>
+
+    <div class="row g-4">
+        <!-- Left Profile Column -->
+        <div class="col-lg-4">
+            <div class="card border-0 shadow-sm rounded-4 p-4 text-center">
+                <div class="doctor-avatar mx-auto mb-3" style="width: 100px; height: 100px; font-size: 2.5rem;">
+                    {{ doctor.name|slice:":1" }}
+                </div>
+                <h3 class="fw-bold mb-1">Dr. {{ doctor.name }}</h3>
+                <p class="text-primary fw-semibold mb-2">{{ doctor.specialization }}</p>
+                <span class="badge bg-primary-subtle text-primary border border-primary-subtle px-3 py-2 rounded-pill mb-3">
+                    {{ doctor.department }} Department
+                </span>
+
+                <hr>
+
+                <div class="text-start small">
+                    <div class="d-flex justify-content-between py-2 border-bottom">
+                        <span class="text-muted"><i class="bi bi-clock-history me-2"></i>Experience:</span>
+                        <strong class="text-dark">{{ doctor.experience_years }} Years</strong>
+                    </div>
+                    <div class="d-flex justify-content-between py-2 border-bottom">
+                        <span class="text-muted"><i class="bi bi-tag-fill me-2"></i>Consultation Fee:</span>
+                        <strong class="text-success fs-6">${{ doctor.consultation_fee }}</strong>
+                    </div>
+                    <div class="d-flex justify-content-between py-2 border-bottom">
+                        <span class="text-muted"><i class="bi bi-patch-check-fill me-2"></i>Status:</span>
+                        {% if doctor.active_status %}
+                            <span class="badge bg-success-subtle text-success">Active &amp; Accepting</span>
+                        {% else %}
+                            <span class="badge bg-secondary-subtle text-secondary">Inactive / Not Accepting</span>
+                        {% endif %}
+                    </div>
+                    {% if doctor.phone %}
+                    <div class="d-flex justify-content-between py-2 border-bottom">
+                        <span class="text-muted"><i class="bi bi-telephone-fill me-2"></i>Phone:</span>
+                        <span class="text-dark">{{ doctor.phone }}</span>
+                    </div>
+                    {% endif %}
+                    {% if doctor.email %}
+                    <div class="d-flex justify-content-between py-2">
+                        <span class="text-muted"><i class="bi bi-envelope-fill me-2"></i>Email:</span>
+                        <span class="text-dark">{{ doctor.email }}</span>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <div class="d-grid mt-4">
+                    {% if doctor.active_status %}
+                        <a href="{% url 'book_appointment' %}?doctor_id={{ doctor.id }}" class="btn btn-primary btn-lg shadow-sm">
+                            <i class="bi bi-calendar2-check me-2"></i>Book Appointment
+                        </a>
+                    {% else %}
+                        <button class="btn btn-secondary btn-lg" disabled>
+                            <i class="bi bi-slash-circle me-2"></i>Booking Unavailable (Inactive)
+                        </button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Detail Column -->
+        <div class="col-lg-8">
+            <div class="card border-0 shadow-sm rounded-4 p-4 p-md-5 mb-4">
+                <h4 class="fw-bold mb-3"><i class="bi bi-info-circle-fill text-primary me-2"></i>About the Doctor</h4>
+                <p class="text-muted lead fs-6">
+                    {{ doctor.bio|default:"Dr. "|add:doctor.name|add:" is an accomplished medical practitioner providing comprehensive clinical assessments and patient-centered diagnostic care." }}
+                </p>
+
+                <hr class="my-4">
+
+                <h5 class="fw-bold mb-3"><i class="bi bi-calendar3 text-primary me-2"></i>Consultation Schedule &amp; Availability</h5>
+                <p class="text-muted small mb-3">Available days for clinic appointments:</p>
+                <div class="d-flex flex-wrap gap-2 mb-4">
+                    {% for day in doctor.available_days_list %}
+                        <span class="badge bg-light text-dark border px-3 py-2 fs-6">
+                            <i class="bi bi-check-circle-fill text-success me-1"></i> {{ day }}
+                        </span>
+                    {% endfor %}
+                </div>
+
+                <div class="alert alert-info border-0 rounded-3 d-flex align-items-center mb-0">
+                    <i class="bi bi-shield-check fs-3 me-3 text-info"></i>
+                    <div class="small">
+                        <strong>Guaranteed Slot Reservation:</strong> Double-booking is strictly prohibited by our system. When you reserve a slot, it is immediately held for your consultation.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

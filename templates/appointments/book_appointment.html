@@ -1,0 +1,201 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Book an Appointment - MediCare Portal{% endblock %}
+
+{% block content %}
+<div class="bg-primary text-white py-4 mb-4 shadow-sm">
+    <div class="container">
+        <h1 class="h3 fw-bold mb-1"><i class="bi bi-calendar-plus me-2"></i>Book Doctor Appointment</h1>
+        <p class="mb-0 text-white-50">Select your specialist, choose an appointment date, and reserve a guaranteed time slot.</p>
+    </div>
+</div>
+
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <div class="card border-0 shadow-sm rounded-4 p-4 p-md-5 mb-5 bg-white">
+                <form method="POST" id="appointmentBookingForm" novalidate>
+                    {% csrf_token %}
+
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger shadow-sm mb-4">
+                            <div class="d-flex align-items-center">
+                                <i class="bi bi-exclamation-octagon-fill fs-4 me-2"></i>
+                                <div>
+                                    <strong class="d-block">Booking Conflict or Error:</strong>
+                                    {% for error in form.non_field_errors %}
+                                        <div>{{ error }}</div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                    {% endif %}
+
+                    <!-- Patient Information Section -->
+                    <div class="mb-4">
+                        <div class="d-flex flex-wrap justify-content-between align-items-center border-bottom pb-2 mb-3">
+                            <h5 class="fw-bold text-dark mb-0">
+                                <i class="bi bi-person-circle text-primary me-2"></i>1. Patient Information
+                            </h5>
+                            {% if user.is_authenticated and user.patient_profile %}
+                                <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">
+                                    <i class="bi bi-shield-check me-1"></i> Authenticated: {{ user.username }}
+                                </span>
+                            {% else %}
+                                <span class="small text-muted">
+                                    Already have an account? <a href="{% url 'patient_login' %}?next={% url 'book_appointment' %}" class="fw-semibold">Sign In</a> for 1-click booking
+                                </span>
+                            {% endif %}
+                        </div>
+
+                        {% if user.is_authenticated and user.patient_profile %}
+                            <div class="p-3 bg-light rounded-3 border d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
+                                <div>
+                                    <strong class="text-dark fs-6">{{ user.patient_profile.name }}</strong>
+                                    <div class="text-muted small mt-1">
+                                        <i class="bi bi-envelope me-1"></i>{{ user.patient_profile.email }} &bull;
+                                        <i class="bi bi-telephone me-1"></i>{{ user.patient_profile.phone }} &bull;
+                                        <i class="bi bi-gender-ambiguous me-1"></i>{{ user.patient_profile.gender }}
+                                    </div>
+                                </div>
+                                <span class="badge bg-primary text-white px-3 py-2">
+                                    <i class="bi bi-link-45deg me-1"></i> Auto-Linked Profile
+                                </span>
+                            </div>
+                        {% endif %}
+
+                        <div class="row g-3 {% if user.is_authenticated and user.patient_profile %}d-none{% endif %}">
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold small">Full Name <span class="text-danger">*</span></label>
+                                {{ form.patient_name }}
+                                {% if form.patient_name.errors %}
+                                    <div class="text-danger small mt-1">{{ form.patient_name.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold small">Email Address <span class="text-danger">*</span></label>
+                                {{ form.patient_email }}
+                                {% if form.patient_email.errors %}
+                                    <div class="text-danger small mt-1">{{ form.patient_email.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold small">Phone Number <span class="text-danger">*</span></label>
+                                {{ form.patient_phone }}
+                                {% if form.patient_phone.errors %}
+                                    <div class="text-danger small mt-1">{{ form.patient_phone.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold small">Gender</label>
+                                {{ form.patient_gender }}
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold small">Date of Birth</label>
+                                {{ form.patient_dob }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Appointment Selection Section -->
+                    <div class="mb-4">
+                        <h5 class="fw-bold text-dark border-bottom pb-2 mb-3">
+                            <i class="bi bi-calendar-event text-primary me-2"></i>2. Doctor &amp; Date Selection
+                        </h5>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold small">Select Doctor <span class="text-danger">*</span></label>
+                                {{ form.doctor }}
+                                {% if selected_doctor %}
+                                    <div class="small text-success mt-1">
+                                        <i class="bi bi-info-circle me-1"></i> Preselected: Dr. {{ selected_doctor.name }} ({{ selected_doctor.department }})
+                                    </div>
+                                {% endif %}
+                                {% if form.doctor.errors %}
+                                    <div class="text-danger small mt-1">{{ form.doctor.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold small">Appointment Date <span class="text-danger">*</span></label>
+                                {{ form.date }}
+                                <div class="form-text small">Select today or a future date. Past dates are strictly rejected.</div>
+                                {% if form.date.errors %}
+                                    <div class="text-danger small mt-1">{{ form.date.errors.0 }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Time Slot Selection Section with Live Availability -->
+                    <div class="mb-4">
+                        <div class="d-flex justify-content-between align-items-center border-bottom pb-2 mb-3">
+                            <h5 class="fw-bold text-dark mb-0">
+                                <i class="bi bi-clock-history text-primary me-2"></i>3. Select Time Slot <span class="text-danger">*</span>
+                            </h5>
+                            <span class="badge bg-light text-muted border">Standardized 30-min Consultation</span>
+                        </div>
+
+                        <!-- Live Slot Interactive Grid Container -->
+                        <div id="slotGridContainer" class="p-3 bg-light rounded-3 border mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="small fw-bold text-secondary">
+                                    <i class="bi bi-broadcast text-primary me-1"></i> Live Slot Availability
+                                </span>
+                                <div class="d-flex align-items-center gap-3 small">
+                                    <span><span class="d-inline-block rounded-1 bg-white border me-1" style="width:14px; height:14px;"></span> Available</span>
+                                    <span><span class="d-inline-block rounded-1 bg-primary me-1" style="width:14px; height:14px;"></span> Selected</span>
+                                    <span><span class="d-inline-block rounded-1 bg-secondary opacity-50 me-1" style="width:14px; height:14px;"></span> Booked</span>
+                                </div>
+                            </div>
+
+                            <div id="slotLoading" class="text-center py-3 text-muted d-none">
+                                <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+                                Querying live slot availability for doctor on chosen date...
+                            </div>
+
+                            <div id="slotGrid" class="slot-grid">
+                                <!-- Populated dynamically by JavaScript fetch -->
+                            </div>
+
+                            <div id="slotSelectedNotice" class="alert alert-primary py-2 px-3 small mt-3 mb-0 d-none">
+                                Selected Slot: None
+                            </div>
+                        </div>
+
+                        <!-- Fallback / Standard Select Element -->
+                        <div class="mt-2">
+                            <label class="form-label small fw-semibold text-muted">Time Slot Dropdown:</label>
+                            {{ form.time_slot }}
+                            {% if form.time_slot.errors %}
+                                <div class="text-danger small mt-1">{{ form.time_slot.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Reason for Visit Section -->
+                    <div class="mb-4">
+                        <h5 class="fw-bold text-dark border-bottom pb-2 mb-3">
+                            <i class="bi bi-chat-left-text text-primary me-2"></i>4. Reason for Consultation
+                        </h5>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold small">Symptoms / Reason <span class="text-danger">*</span></label>
+                            {{ form.reason }}
+                            {% if form.reason.errors %}
+                                <div class="text-danger small mt-1">{{ form.reason.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Submit Button -->
+                    <div class="d-grid mt-4">
+                        <button type="submit" class="btn btn-primary btn-lg shadow">
+                            <i class="bi bi-check2-circle me-2"></i>Confirm &amp; Book Appointment
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
