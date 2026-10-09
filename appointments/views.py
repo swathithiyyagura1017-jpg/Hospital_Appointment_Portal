@@ -1,3 +1,5 @@
+import os
+import secrets
 from datetime import date
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
@@ -5,7 +7,7 @@ from django.contrib.auth import login, logout, authenticate
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.models import User
-from django.http import JsonResponse
+from django.http import JsonResponse, Http404
 from django.utils import timezone
 from django.db.models import Q, Count
 
@@ -608,3 +610,54 @@ def patient_logout_view(request):
         logout(request)
         messages.info(request, "You have been securely logged out.")
     return redirect('home')
+
+
+@login_required
+def activate_staff_view(request):
+    """
+    Secure, temporary one-time staff activation endpoint.
+    Security rules:
+    - Disabled (returns 404) if STAFF_ACTIVATION_KEY is not set or empty in environment.
+    - Requires the user to be logged in (@login_required).
+    - Submitted username must match request.user.username (prevents activating other accounts).
+    - Secret key compared securely using constant-time secrets.compare_digest.
+    - Grants is_staff=True, is_superuser=False.
+    - Preserves passwords, patient profiles, doctors, and appointments.
+    """
+    server_key = os.environ.get('STAFF_ACTIVATION_KEY')
+    if not server_key or not server_key.strip():
+        raise Http404("Staff activation is disabled on this server.")
+
+    if request.method == 'POST':
+        submitted_username = request.POST.get('username', '').strip()
+        submitted_key = request.POST.get('activation_key', '').strip()
+
+        # Enforce that the submitted username matches the currently authenticated user
+        if not submitted_username or submitted_username != request.user.username:
+            messages.error(request, "Permission denied: You can only activate staff access for your own authenticated account.")
+            return render(request, 'appointments/activate_staff.html')
+
+        # Secure constant-time comparison against the environment secret
+        if not secrets.compare_digest(submitted_key, server_key.strip()):
+            messages.error(request, "Invalid activation secret key. Access denied.")
+            return render(request, 'appointments/activate_staff.html')
+
+        # If user is already staff, inform and route to dashboard
+        if request.user.is_staff:
+            messages.info(request, "Your account already has staff privileges.")
+            return redirect('staff_dashboard')
+
+        # Grant staff privileges without altering passwords, superuser, or other data
+        user = request.user
+        user.is_staff = True
+        user.is_superuser = False
+        user.save(update_fields=['is_staff', 'is_superuser'])
+
+        messages.success(
+            request,
+            f"Staff privileges successfully activated for '{user.username}'! Welcome to the Staff Management Portal."
+        )
+        return redirect('staff_dashboard')
+
+    return render(request, 'appointments/activate_staff.html')
+

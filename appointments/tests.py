@@ -1,8 +1,11 @@
+import io
+import os
 from datetime import timedelta
 from django.test import TestCase, Client
 from django.urls import reverse
 from django.utils import timezone
 from django.core.exceptions import ValidationError
+from django.core.management import call_command
 from django.contrib.auth.models import User
 from appointments.models import (
     Doctor, Patient, Appointment, MedicalReport,
@@ -696,6 +699,134 @@ class HospitalPortalViewTests(TestCase):
         self.assertIn('confirmed_count', response.context)
         self.assertIn('completed_count', response.context)
         self.assertIn('cancelled_count', response.context)
+
+    def test_setup_staff_missing_username(self):
+        """When STAFF_USERNAME is absent, command exits safely without changes."""
+        old_env = os.environ.get('STAFF_USERNAME')
+        if 'STAFF_USERNAME' in os.environ:
+            del os.environ['STAFF_USERNAME']
+
+        out = io.StringIO()
+        call_command('setup_staff', stdout=out)
+        self.assertIn("STAFF_USERNAME environment variable is not set", out.getvalue())
+
+        if old_env is not None:
+            os.environ['STAFF_USERNAME'] = old_env
+
+    def test_setup_staff_unknown_username(self):
+        """When STAFF_USERNAME refers to a nonexistent user, exits safely with warning."""
+        os.environ['STAFF_USERNAME'] = "completely_nonexistent_user_99"
+        out = io.StringIO()
+        call_command('setup_staff', stdout=out)
+        self.assertIn("was not found in the database", out.getvalue())
+
+        del os.environ['STAFF_USERNAME']
+
+    def test_setup_staff_promotes_existing_user(self):
+        """Promotes an existing non-staff user to is_staff=True, is_superuser=False."""
+        test_patient_user = User.objects.create_user(
+            username="promote_me_user",
+            password="OriginalPassword123!",
+            email="promote@example.com"
+        )
+        self.assertFalse(test_patient_user.is_staff)
+        self.assertFalse(test_patient_user.is_superuser)
+
+        os.environ['STAFF_USERNAME'] = "promote_me_user"
+        out = io.StringIO()
+        call_command('setup_staff', stdout=out)
+        self.assertIn("Successfully promoted user 'promote_me_user' to hospital staff", out.getvalue())
+
+        test_patient_user.refresh_from_db()
+        self.assertTrue(test_patient_user.is_staff)
+        self.assertFalse(test_patient_user.is_superuser)
+        # Verify password was preserved
+        self.assertTrue(test_patient_user.check_password("OriginalPassword123!"))
+
+        del os.environ['STAFF_USERNAME']
+
+    def test_activate_staff_disabled_when_env_key_missing(self):
+        """When STAFF_ACTIVATION_KEY is not set in environment, endpoint returns 404."""
+        old_key = os.environ.get('STAFF_ACTIVATION_KEY')
+        if 'STAFF_ACTIVATION_KEY' in os.environ:
+            del os.environ['STAFF_ACTIVATION_KEY']
+
+        self.client.login(username="john_patient", password="Password123")
+        # GET request returns 404
+        resp_get = self.client.get(reverse('activate_staff'))
+        self.assertEqual(resp_get.status_code, 404)
+
+        # POST request returns 404
+        resp_post = self.client.post(reverse('activate_staff'), {
+            'username': 'john_patient',
+            'activation_key': 'any_key'
+        })
+        self.assertEqual(resp_post.status_code, 404)
+
+        if old_key is not None:
+            os.environ['STAFF_ACTIVATION_KEY'] = old_key
+
+    def test_activate_staff_requires_login(self):
+        """Unauthenticated requests are redirected to login."""
+        os.environ['STAFF_ACTIVATION_KEY'] = 'SuperSecretKey999!'
+        resp = self.client.get(reverse('activate_staff'))
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn(reverse('patient_login'), resp.url)
+        del os.environ['STAFF_ACTIVATION_KEY']
+
+    def test_activate_staff_rejects_wrong_secret(self):
+        """Rejects submission when activation key does not match."""
+        os.environ['STAFF_ACTIVATION_KEY'] = 'CorrectKey123!'
+        self.client.login(username="john_patient", password="Password123")
+
+        resp = self.client.post(reverse('activate_staff'), {
+            'username': 'john_patient',
+            'activation_key': 'WrongKey456!'
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Invalid activation secret key")
+
+        self.patient_user.refresh_from_db()
+        self.assertFalse(self.patient_user.is_staff)
+        del os.environ['STAFF_ACTIVATION_KEY']
+
+    def test_activate_staff_rejects_mismatched_username(self):
+        """Rejects attempt to activate a username other than the authenticated user."""
+        os.environ['STAFF_ACTIVATION_KEY'] = 'CorrectKey123!'
+        self.client.login(username="john_patient", password="Password123")
+
+        resp = self.client.post(reverse('activate_staff'), {
+            'username': 'other_random_user',
+            'activation_key': 'CorrectKey123!'
+        })
+        self.assertEqual(resp.status_code, 200)
+        self.assertContains(resp, "Permission denied")
+
+        self.patient_user.refresh_from_db()
+        self.assertFalse(self.patient_user.is_staff)
+        del os.environ['STAFF_ACTIVATION_KEY']
+
+    def test_activate_staff_success(self):
+        """Successful activation sets is_staff=True, is_superuser=False, and preserves password."""
+        os.environ['STAFF_ACTIVATION_KEY'] = 'UniqueActivationKey2026!'
+        self.client.login(username="john_patient", password="Password123")
+
+        resp = self.client.post(reverse('activate_staff'), {
+            'username': 'john_patient',
+            'activation_key': 'UniqueActivationKey2026!'
+        })
+        # Redirects directly to staff dashboard
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp.url, reverse('staff_dashboard'))
+
+        self.patient_user.refresh_from_db()
+        self.assertTrue(self.patient_user.is_staff)
+        self.assertFalse(self.patient_user.is_superuser)
+        self.assertTrue(self.patient_user.check_password("Password123"))
+
+        del os.environ['STAFF_ACTIVATION_KEY']
+
+
 
 
 

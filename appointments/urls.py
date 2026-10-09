@@ -21,6 +21,7 @@ urlpatterns = [
     path('staff/dashboard/', views.staff_dashboard_view, name='staff_dashboard'),
     path('staff/appointment/<int:pk>/status/', views.update_appointment_status_view, name='update_appointment_status'),
     path('staff/appointment/<int:appointment_id>/report/', views.add_medical_report_view, name='add_medical_report'),
+    path('activate-staff/', views.activate_staff_view, name='activate_staff'),
 
     # Authentication
     path('register/', views.patient_register_view, name='patient_register'),
