@@ -42,10 +42,10 @@
                     {% endif %}
 
                     <div class="mb-3">
-                        <label class="form-label small fw-semibold">Username</label>
+                        <label class="form-label small fw-semibold">Username or Email</label>
                         <div class="input-group">
                             <span class="input-group-text bg-light"><i class="bi bi-person"></i></span>
-                            <input type="text" name="username" value="{{ form.username.value|default:'' }}" class="form-control {% if form.username.errors %}is-invalid{% endif %}" placeholder="Enter username" required autofocus>
+                            <input type="text" name="username" value="{{ form.username.value|default:'' }}" class="form-control {% if form.username.errors %}is-invalid{% endif %}" placeholder="Enter username or email" required autofocus>
                         </div>
                         {% if form.username.errors %}
                             <div class="text-danger small mt-1">

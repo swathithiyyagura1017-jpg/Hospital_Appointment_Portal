@@ -142,8 +142,39 @@ STORAGES = {
 WHITENOISE_MANIFEST_STRICT = False
 
 
-# Authentication URLs
+# Authentication URLs and Backends
 LOGIN_URL = 'patient_login'
 LOGIN_REDIRECT_URL = 'patient_dashboard'
 LOGOUT_REDIRECT_URL = 'home'
+
+AUTHENTICATION_BACKENDS = [
+    'appointments.backends.EmailOrUsernameModelBackend',
+]
+
+
+# Structured Logging (Outputs to console for Render/local visibility without leaking secrets)
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '[{asctime}] {levelname} [{name}]: {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'appointments': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+    },
+}
+
 

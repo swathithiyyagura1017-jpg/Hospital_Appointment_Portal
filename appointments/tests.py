@@ -882,6 +882,124 @@ class HospitalPortalViewTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.url, reverse('book_appointment'))
 
+    def test_end_to_end_registration_and_login_success(self):
+        """Register through the real registration endpoint and log in through the real login endpoint."""
+        reg_data = {
+            'username': 'mary_jane',
+            'name': 'Mary Jane Watson',
+            'email': 'mary.jane@example.com',
+            'phone': '+1-555-7788',
+            'gender': 'Female',
+            'password': 'ComplexPassword123!',
+            'confirm_password': 'ComplexPassword123!',
+        }
+        reg_resp = self.client.post(reverse('patient_register'), data=reg_data)
+        self.assertEqual(reg_resp.status_code, 302)
+        self.assertEqual(reg_resp.url, reverse('patient_dashboard'))
+
+        # Log out
+        self.client.post(reverse('patient_logout'))
+
+        # Log in with exact credentials
+        login_resp = self.client.post(reverse('patient_login'), data={
+            'username': 'mary_jane',
+            'password': 'ComplexPassword123!'
+        })
+        self.assertEqual(login_resp.status_code, 302)
+        self.assertEqual(login_resp.url, reverse('patient_dashboard'))
+
+    def test_end_to_end_registration_and_login_invalid_password(self):
+        """Register through real registration endpoint and verify wrong password fails at login."""
+        reg_data = {
+            'username': 'david_test',
+            'name': 'David Tester',
+            'email': 'david.tester@example.com',
+            'phone': '+1-555-9900',
+            'gender': 'Male',
+            'password': 'CorrectPassword123!',
+            'confirm_password': 'CorrectPassword123!',
+        }
+        reg_resp = self.client.post(reverse('patient_register'), data=reg_data)
+        self.assertEqual(reg_resp.status_code, 302)
+
+        # Log out
+        self.client.post(reverse('patient_logout'))
+
+        # Attempt login with incorrect password
+        bad_login_resp = self.client.post(reverse('patient_login'), data={
+            'username': 'david_test',
+            'password': 'WrongPassword999!'
+        })
+        self.assertEqual(bad_login_resp.status_code, 200)
+        self.assertContains(bad_login_resp, "Invalid username or password. Please try again.")
+
+    def test_login_supports_case_insensitive_username(self):
+        """User registered with mixed case can log in using lowercase or uppercase username."""
+        reg_data = {
+            'username': 'CaseMixedUser',
+            'name': 'Case Tester',
+            'email': 'case.tester@example.com',
+            'phone': '+1-555-1199',
+            'gender': 'Male',
+            'password': 'Password12345!',
+            'confirm_password': 'Password12345!',
+        }
+        self.client.post(reverse('patient_register'), data=reg_data)
+        self.client.post(reverse('patient_logout'))
+
+        # Login with lowercase
+        resp_lower = self.client.post(reverse('patient_login'), data={
+            'username': 'casemixeduser',
+            'password': 'Password12345!'
+        })
+        self.assertEqual(resp_lower.status_code, 302)
+        self.assertEqual(resp_lower.url, reverse('patient_dashboard'))
+
+    def test_login_supports_email_as_identifier(self):
+        """User can log in using their registered email address instead of username."""
+        reg_data = {
+            'username': 'email_login_patient',
+            'name': 'Email Tester',
+            'email': 'patient.email@example.com',
+            'phone': '+1-555-2288',
+            'gender': 'Female',
+            'password': 'Password12345!',
+            'confirm_password': 'Password12345!',
+        }
+        self.client.post(reverse('patient_register'), data=reg_data)
+        self.client.post(reverse('patient_logout'))
+
+        # Login using email (including mixed-case email)
+        resp_email = self.client.post(reverse('patient_login'), data={
+            'username': 'PATIENT.EMAIL@EXAMPLE.COM',
+            'password': 'Password12345!'
+        })
+        self.assertEqual(resp_email.status_code, 302)
+        self.assertEqual(resp_email.url, reverse('patient_dashboard'))
+
+    def test_login_supports_whitespace_trimmed_identifier(self):
+        """Leading and trailing spaces in username/email are cleanly ignored."""
+        reg_data = {
+            'username': 'trimmed_patient',
+            'name': 'Trim Tester',
+            'email': 'trimmed@example.com',
+            'phone': '+1-555-3399',
+            'gender': 'Male',
+            'password': 'Password12345!',
+            'confirm_password': 'Password12345!',
+        }
+        self.client.post(reverse('patient_register'), data=reg_data)
+        self.client.post(reverse('patient_logout'))
+
+        # Login with untrimmed whitespace
+        resp_trimmed = self.client.post(reverse('patient_login'), data={
+            'username': '   trimmed_patient   ',
+            'password': 'Password12345!'
+        })
+        self.assertEqual(resp_trimmed.status_code, 302)
+        self.assertEqual(resp_trimmed.url, reverse('patient_dashboard'))
+
+
 
 
 

@@ -1,5 +1,6 @@
 import os
 import secrets
+import logging
 from datetime import date
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
@@ -10,6 +11,8 @@ from django.contrib.auth.models import User
 from django.http import JsonResponse, Http404
 from django.utils import timezone
 from django.db.models import Q, Count
+
+logger = logging.getLogger('appointments.auth')
 
 from functools import wraps
 from django.urls import reverse
@@ -565,7 +568,11 @@ def patient_register_view(request):
                     patient.address = address
                 patient.save()
 
-            login(request, user)
+            login(request, user, backend='appointments.backends.EmailOrUsernameModelBackend')
+            logger.info(
+                f"Registered new patient user '{user.username}' (email='{user.email}', "
+                f"total_users_in_db={User.objects.count()})"
+            )
             messages.success(request, f"Welcome to the portal, {name}! Your patient account has been created.")
             return redirect('patient_dashboard')
     else:
@@ -575,12 +582,29 @@ def patient_register_view(request):
 
 
 def patient_login_view(request):
-    """Login view for patients and staff using Django AuthenticationForm"""
+    """Login view for patients and staff using Django AuthenticationForm with safe diagnostic logging"""
     if request.method == 'POST':
+        raw_identifier = request.POST.get('username', '').strip()
+        total_users = User.objects.count()
+        matched_user = User.objects.filter(
+            Q(username__iexact=raw_identifier) | Q(email__iexact=raw_identifier)
+        ).first()
+        user_found = bool(matched_user)
+        is_active = matched_user.is_active if matched_user else False
+
+        logger.info(
+            f"Login attempt received: identifier='{raw_identifier}', "
+            f"user_found={user_found}, is_active={is_active}, total_users_in_db={total_users}"
+        )
+
         form = AuthenticationForm(request, data=request.POST)
         if form.is_valid():
             user = form.get_user()
             login(request, user)
+            logger.info(
+                f"Login successful: user_id={user.id}, username='{user.username}', "
+                f"is_staff={user.is_staff}, is_superuser={user.is_superuser}"
+            )
             messages.success(request, f"Welcome back, {user.first_name or user.username}!")
             next_url = request.GET.get('next') or request.POST.get('next')
             if next_url and url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}):
@@ -589,6 +613,12 @@ def patient_login_view(request):
                 return redirect('staff_dashboard')
             return redirect('patient_dashboard')
         else:
+            logger.warning(
+                f"Login rejected: identifier='{raw_identifier}', "
+                f"user_found={user_found}, "
+                f"reason={'password mismatch' if user_found else 'user not found in database'}, "
+                f"total_users_in_db={total_users}"
+            )
             messages.error(request, "Invalid username or password. Please try again.")
     else:
         form = AuthenticationForm()
