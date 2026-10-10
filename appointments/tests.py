@@ -823,8 +823,65 @@ class HospitalPortalViewTests(TestCase):
         self.assertTrue(self.patient_user.is_staff)
         self.assertFalse(self.patient_user.is_superuser)
         self.assertTrue(self.patient_user.check_password("Password123"))
-
         del os.environ['STAFF_ACTIVATION_KEY']
+
+    def test_login_get_displays_form_for_unauthenticated_visitor(self):
+        """Unauthenticated GET request to /login/ displays the login form."""
+        response = self.client.get(reverse('patient_login'))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'appointments/login.html')
+        self.assertContains(response, 'Sign In')
+        self.assertContains(response, 'name="username"')
+        self.assertContains(response, 'name="password"')
+        self.assertNotContains(response, 'Signed in as')
+
+    def test_login_get_displays_form_for_authenticated_visitor(self):
+        """Authenticated GET request to /login/ displays the login form and active session banner."""
+        self.client.login(username="john_patient", password="Password123")
+        response = self.client.get(reverse('patient_login'))
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'appointments/login.html')
+        self.assertContains(response, 'Signed in as')
+        self.assertContains(response, 'john_patient')
+        self.assertContains(response, 'name="username"')
+
+    def test_login_invalid_credentials_does_not_redirect(self):
+        """Invalid credentials submission remains on login page and shows error message."""
+        response = self.client.post(reverse('patient_login'), {
+            'username': 'john_patient',
+            'password': 'WrongPassword123!'
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'appointments/login.html')
+        self.assertContains(response, "Invalid username or password. Please try again.")
+
+    def test_login_valid_patient_redirects_to_patient_dashboard(self):
+        """Valid patient login authenticates and redirects to patient dashboard."""
+        response = self.client.post(reverse('patient_login'), {
+            'username': 'john_patient',
+            'password': 'Password123'
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('patient_dashboard'))
+
+    def test_login_valid_staff_redirects_to_staff_dashboard(self):
+        """Valid staff login authenticates and redirects to staff dashboard."""
+        response = self.client.post(reverse('patient_login'), {
+            'username': 'staff_user',
+            'password': 'Password123'
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('staff_dashboard'))
+
+    def test_login_redirects_to_safe_next_url(self):
+        """Login honors safe 'next' query parameter."""
+        response = self.client.post(reverse('patient_login') + f"?next={reverse('book_appointment')}", {
+            'username': 'john_patient',
+            'password': 'Password123'
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('book_appointment'))
+
 
 
 

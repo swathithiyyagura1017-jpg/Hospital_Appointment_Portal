@@ -16,7 +16,18 @@
                     <p class="text-muted small">Access your patient portal or staff administration</p>
                 </div>
 
-                <form method="POST">
+                {% if user.is_authenticated %}
+                <div class="alert alert-info py-2 px-3 small d-flex justify-content-between align-items-center mb-3">
+                    <div>
+                        <i class="bi bi-info-circle me-1"></i> Signed in as <strong>{{ user.username }}</strong>
+                    </div>
+                    <a href="{% if user.is_staff or user.is_superuser %}{% url 'staff_dashboard' %}{% else %}{% url 'patient_dashboard' %}{% endif %}" class="btn btn-sm btn-primary py-0">
+                        Dashboard
+                    </a>
+                </div>
+                {% endif %}
+
+                <form method="POST" action="{% url 'patient_login' %}">
                     {% csrf_token %}
                     {% if next %}
                         <input type="hidden" name="next" value="{{ next }}">
@@ -34,16 +45,26 @@
                         <label class="form-label small fw-semibold">Username</label>
                         <div class="input-group">
                             <span class="input-group-text bg-light"><i class="bi bi-person"></i></span>
-                            <input type="text" name="username" class="form-control" placeholder="Enter username" required autofocus>
+                            <input type="text" name="username" value="{{ form.username.value|default:'' }}" class="form-control {% if form.username.errors %}is-invalid{% endif %}" placeholder="Enter username" required autofocus>
                         </div>
+                        {% if form.username.errors %}
+                            <div class="text-danger small mt-1">
+                                {% for error in form.username.errors %}<div>{{ error }}</div>{% endfor %}
+                            </div>
+                        {% endif %}
                     </div>
 
                     <div class="mb-4">
                         <label class="form-label small fw-semibold">Password</label>
                         <div class="input-group">
                             <span class="input-group-text bg-light"><i class="bi bi-lock"></i></span>
-                            <input type="password" name="password" class="form-control" placeholder="Enter password" required>
+                            <input type="password" name="password" class="form-control {% if form.password.errors %}is-invalid{% endif %}" placeholder="Enter password" required>
                         </div>
+                        {% if form.password.errors %}
+                            <div class="text-danger small mt-1">
+                                {% for error in form.password.errors %}<div>{{ error }}</div>{% endfor %}
+                            </div>
+                        {% endif %}
                     </div>
 
                     <div class="d-grid mb-3">

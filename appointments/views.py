@@ -576,11 +576,6 @@ def patient_register_view(request):
 
 def patient_login_view(request):
     """Login view for patients and staff using Django AuthenticationForm"""
-    if request.user.is_authenticated:
-        if request.user.is_staff:
-            return redirect('staff_dashboard')
-        return redirect('patient_dashboard')
-
     if request.method == 'POST':
         form = AuthenticationForm(request, data=request.POST)
         if form.is_valid():
@@ -590,7 +585,7 @@ def patient_login_view(request):
             next_url = request.GET.get('next') or request.POST.get('next')
             if next_url and url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}):
                 return redirect(next_url)
-            if user.is_staff:
+            if user.is_staff or user.is_superuser:
                 return redirect('staff_dashboard')
             return redirect('patient_dashboard')
         else:
@@ -600,7 +595,7 @@ def patient_login_view(request):
 
     return render(request, 'appointments/login.html', {
         'form': form,
-        'next': request.GET.get('next', '')
+        'next': request.POST.get('next') or request.GET.get('next', '')
     })
 
 
