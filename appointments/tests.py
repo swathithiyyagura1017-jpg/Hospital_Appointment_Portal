@@ -1121,6 +1121,45 @@ class HospitalPortalViewTests(TestCase):
         self.assertNotContains(resp_staff, 'Staff Login')
         self.assertContains(resp_staff, 'Staff Portal')
 
+    def test_dedicated_staff_account_role_and_dashboard_access(self):
+        """Dedicated staff user (is_staff=True, is_superuser=False) logs in and accesses staff dashboard while patient cannot."""
+        dedicated_staff = User.objects.create_user(
+            username="dedicated_demo_staff",
+            password="DemoStaffPassword123!",
+            email="demo.staff@hospitalportal.org",
+            is_staff=True
+        )
+        self.assertFalse(dedicated_staff.is_superuser)
+        self.assertTrue(dedicated_staff.is_staff)
+
+        # 1. Logging in via /login/ redirects to staff_dashboard
+        login_resp = self.client.post(reverse('patient_login'), {
+            'username': 'dedicated_demo_staff',
+            'password': 'DemoStaffPassword123!'
+        })
+        self.assertEqual(login_resp.status_code, 302)
+        self.assertEqual(login_resp.url, reverse('staff_dashboard'))
+
+        # 2. Can access /staff/dashboard/ and view operations
+        dash_resp = self.client.get(reverse('staff_dashboard'))
+        self.assertEqual(dash_resp.status_code, 200)
+        self.assertContains(dash_resp, "Hospital Operations")
+
+        # 3. Patient login continues to redirect to /dashboard/
+        self.client.logout()
+        patient_resp = self.client.post(reverse('patient_login'), {
+            'username': 'john_patient',
+            'password': 'Password123'
+        })
+        self.assertEqual(patient_resp.status_code, 302)
+        self.assertEqual(patient_resp.url, reverse('patient_dashboard'))
+
+        # 4. Patient is blocked from /staff/dashboard/
+        blocked_resp = self.client.get(reverse('staff_dashboard'))
+        self.assertEqual(blocked_resp.status_code, 302)
+        self.assertEqual(blocked_resp.url, reverse('patient_dashboard'))
+
+
 
 
 
