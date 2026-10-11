@@ -1098,6 +1098,30 @@ class HospitalPortalViewTests(TestCase):
         self.assertEqual(post_resp.status_code, 302)
         self.assertEqual(post_resp.url, reverse('home'))
 
+    def test_navbar_staff_login_option_for_unauthenticated_user(self):
+        """Navbar displays a clearly visible Staff Login link pointing to /login/ for unauthenticated visitors."""
+        response = self.client.get(reverse('home'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Staff Login')
+        self.assertContains(response, f'href="{reverse("patient_login")}"')
+
+    def test_navbar_hides_staff_login_for_authenticated_users(self):
+        """Navbar hides Staff Login when a user (patient or staff) is logged in."""
+        # Patient logged in
+        self.client.login(username="john_patient", password="Password123")
+        resp_patient = self.client.get(reverse('home'))
+        self.assertEqual(resp_patient.status_code, 200)
+        self.assertNotContains(resp_patient, 'Staff Login')
+        self.assertContains(resp_patient, 'My Dashboard')
+
+        # Staff logged in
+        self.client.login(username="staff_user", password="Password123")
+        resp_staff = self.client.get(reverse('home'))
+        self.assertEqual(resp_staff.status_code, 200)
+        self.assertNotContains(resp_staff, 'Staff Login')
+        self.assertContains(resp_staff, 'Staff Portal')
+
+
 
 
 
