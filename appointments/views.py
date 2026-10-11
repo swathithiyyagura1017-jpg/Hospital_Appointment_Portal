@@ -17,6 +17,7 @@ logger = logging.getLogger('appointments.auth')
 from functools import wraps
 from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
+from django.views.decorators.csrf import ensure_csrf_cookie
 
 from .models import (
     Doctor, Patient, Appointment, MedicalReport,
@@ -515,6 +516,7 @@ def medical_report_detail_view(request, pk):
 
 # --- Authentication Views ---
 
+@ensure_csrf_cookie
 def patient_register_view(request):
     """Register a new patient account using Django authentication"""
     if request.user.is_authenticated:
@@ -581,6 +583,7 @@ def patient_register_view(request):
     return render(request, 'appointments/register.html', {'form': form})
 
 
+@ensure_csrf_cookie
 def patient_login_view(request):
     """Login view for patients and staff using Django AuthenticationForm with safe diagnostic logging"""
     if request.method == 'POST':

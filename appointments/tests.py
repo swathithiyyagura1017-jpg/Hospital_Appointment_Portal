@@ -999,6 +999,106 @@ class HospitalPortalViewTests(TestCase):
         self.assertEqual(resp_trimmed.status_code, 302)
         self.assertEqual(resp_trimmed.url, reverse('patient_dashboard'))
 
+    def test_csrf_protection_rejects_post_without_token(self):
+        """CSRF protection is strictly enabled and rejects POST requests lacking a CSRF token."""
+        csrf_client = Client(enforce_csrf_checks=True)
+        resp = csrf_client.post(reverse('patient_login'), data={
+            'username': 'john_patient',
+            'password': 'Password123'
+        })
+        self.assertEqual(resp.status_code, 403)
+
+    def test_production_https_login_with_csrf_succeeds(self):
+        """Production-style HTTPS request with valid CSRF token and proxy headers succeeds without 403."""
+        csrf_client = Client(enforce_csrf_checks=True)
+        # GET request fetches the page and receives CSRF cookie
+        get_resp = csrf_client.get(
+            reverse('patient_login'),
+            secure=True,
+            HTTP_HOST='hospital-appointment-portal-25sx.onrender.com',
+            HTTP_X_FORWARDED_PROTO='https'
+        )
+        self.assertEqual(get_resp.status_code, 200)
+        self.assertIn('csrftoken', csrf_client.cookies)
+        csrf_token = csrf_client.cookies['csrftoken'].value
+
+        # POST with CSRF token, Origin, and Referer matching production Render setup
+        post_resp = csrf_client.post(
+            reverse('patient_login'),
+            data={
+                'csrfmiddlewaretoken': csrf_token,
+                'username': 'john_patient',
+                'password': 'Password123'
+            },
+            secure=True,
+            HTTP_HOST='hospital-appointment-portal-25sx.onrender.com',
+            HTTP_ORIGIN='https://hospital-appointment-portal-25sx.onrender.com',
+            HTTP_REFERER='https://hospital-appointment-portal-25sx.onrender.com/login/',
+            HTTP_X_FORWARDED_PROTO='https'
+        )
+        self.assertEqual(post_resp.status_code, 302)
+        self.assertEqual(post_resp.url, reverse('patient_dashboard'))
+
+    def test_production_https_registration_with_csrf_succeeds(self):
+        """Production-style HTTPS registration with CSRF token succeeds without 403."""
+        csrf_client = Client(enforce_csrf_checks=True)
+        get_resp = csrf_client.get(
+            reverse('patient_register'),
+            secure=True,
+            HTTP_HOST='hospital-appointment-portal-25sx.onrender.com',
+            HTTP_X_FORWARDED_PROTO='https'
+        )
+        self.assertEqual(get_resp.status_code, 200)
+        self.assertIn('csrftoken', csrf_client.cookies)
+        csrf_token = csrf_client.cookies['csrftoken'].value
+
+        reg_data = {
+            'csrfmiddlewaretoken': csrf_token,
+            'username': 'csrf_patient_user',
+            'name': 'CSRF Patient',
+            'email': 'csrf.patient@example.com',
+            'phone': '+1-555-4477',
+            'gender': 'Female',
+            'password': 'Password123!',
+            'confirm_password': 'Password123!',
+        }
+        post_resp = csrf_client.post(
+            reverse('patient_register'),
+            data=reg_data,
+            secure=True,
+            HTTP_HOST='hospital-appointment-portal-25sx.onrender.com',
+            HTTP_ORIGIN='https://hospital-appointment-portal-25sx.onrender.com',
+            HTTP_REFERER='https://hospital-appointment-portal-25sx.onrender.com/register/',
+            HTTP_X_FORWARDED_PROTO='https'
+        )
+        self.assertEqual(post_resp.status_code, 302)
+        self.assertEqual(post_resp.url, reverse('patient_dashboard'))
+
+    def test_production_https_logout_with_csrf_succeeds(self):
+        """Production-style HTTPS logout via POST with CSRF token succeeds without 403."""
+        csrf_client = Client(enforce_csrf_checks=True)
+        csrf_client.login(username="john_patient", password="Password123")
+        get_resp = csrf_client.get(
+            reverse('home'),
+            secure=True,
+            HTTP_HOST='hospital-appointment-portal-25sx.onrender.com',
+            HTTP_X_FORWARDED_PROTO='https'
+        )
+        csrf_token = csrf_client.cookies['csrftoken'].value
+
+        post_resp = csrf_client.post(
+            reverse('patient_logout'),
+            data={'csrfmiddlewaretoken': csrf_token},
+            secure=True,
+            HTTP_HOST='hospital-appointment-portal-25sx.onrender.com',
+            HTTP_ORIGIN='https://hospital-appointment-portal-25sx.onrender.com',
+            HTTP_REFERER='https://hospital-appointment-portal-25sx.onrender.com/',
+            HTTP_X_FORWARDED_PROTO='https'
+        )
+        self.assertEqual(post_resp.status_code, 302)
+        self.assertEqual(post_resp.url, reverse('home'))
+
+
 
 
 

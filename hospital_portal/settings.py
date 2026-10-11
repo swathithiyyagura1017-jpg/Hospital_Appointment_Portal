@@ -27,14 +27,54 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-n-7oj&bi!4tz#8#f(q2oa
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get('DEBUG', 'True').lower() in ('true', '1', 'yes')
 
-ALLOWED_HOSTS = [h.strip() for h in os.environ.get('ALLOWED_HOSTS', '*').split(',') if h.strip()]
+# Allowed Hosts configuration
+_raw_hosts = os.environ.get('ALLOWED_HOSTS', '.onrender.com,localhost,127.0.0.1')
+ALLOWED_HOSTS = [h.strip() for h in _raw_hosts.split(',') if h.strip()]
+for _def_host in ['.onrender.com', 'hospital-appointment-portal-25sx.onrender.com', 'localhost', '127.0.0.1']:
+    if _def_host not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(_def_host)
+render_host = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
+if render_host and render_host not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(render_host)
 
-CSRF_TRUSTED_ORIGINS = [
-    origin.strip() for origin in os.environ.get(
-        'CSRF_TRUSTED_ORIGINS',
-        'https://*.onrender.com,http://localhost:8000,http://127.0.0.1:8000'
-    ).split(',') if origin.strip()
-]
+# CSRF Trusted Origins configuration (Normalized without trailing slashes, ensuring scheme)
+_raw_origins = os.environ.get(
+    'CSRF_TRUSTED_ORIGINS',
+    'https://*.onrender.com,https://hospital-appointment-portal-25sx.onrender.com,http://localhost:8000,http://127.0.0.1:8000'
+)
+CSRF_TRUSTED_ORIGINS = []
+for _orig in _raw_origins.split(','):
+    _cleaned = _orig.strip().rstrip('/')
+    if _cleaned:
+        if not _cleaned.startswith(('http://', 'https://')):
+            _cleaned = f'https://{_cleaned}'
+        if _cleaned not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(_cleaned)
+
+# Always guarantee production Render domain and wildcard are trusted
+for _default_origin in [
+    'https://*.onrender.com',
+    'https://hospital-appointment-portal-25sx.onrender.com',
+]:
+    if _default_origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(_default_origin)
+
+if render_host:
+    _host_origin = f'https://{render_host}'.rstrip('/')
+    if _host_origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(_host_origin)
+
+# Reverse proxy SSL header and host forwarding for Render deployment
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+USE_X_FORWARDED_HOST = True
+
+# Production SSL and Cookie security
+if not DEBUG:
+    CSRF_COOKIE_SECURE = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SAMESITE = 'Lax'
+    SESSION_COOKIE_SAMESITE = 'Lax'
+
 
 
 # Application definition
