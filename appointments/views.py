@@ -36,12 +36,12 @@ def is_hospital_staff(user):
 def staff_required(view_func):
     """
     Decorator for views that checks that the user is logged in and is a staff member or superuser.
-    Redirects unauthenticated users to login, and non-staff authenticated users to patient_dashboard with a warning.
+    Redirects unauthenticated users to staff_login, and non-staff authenticated users to patient_dashboard with a warning.
     """
     @wraps(view_func)
     def _wrapped_view(request, *args, **kwargs):
         if not request.user.is_authenticated:
-            login_url = reverse('patient_login')
+            login_url = reverse('staff_login')
             return redirect(f"{login_url}?next={request.path}")
         if not (request.user.is_staff or request.user.is_superuser):
             messages.error(request, "Access restricted. Hospital staff privileges are required to view this page.")
@@ -676,6 +676,69 @@ def patient_login_view(request):
         form = AuthenticationForm()
 
     return render(request, 'appointments/login.html', {
+        'form': form,
+        'next': request.POST.get('next') or request.GET.get('next', '')
+    })
+
+
+@ensure_csrf_cookie
+def staff_login_view(request):
+    """
+    Dedicated secure login view for hospital staff and administrators.
+    Rejects non-staff users and redirects authenticated staff to staff_dashboard.
+    """
+    if request.user.is_authenticated:
+        if request.user.is_staff or request.user.is_superuser:
+            return redirect('staff_dashboard')
+        messages.info(request, "You are currently signed in as a patient. Please sign out first to access the staff portal.")
+        return redirect('patient_dashboard')
+
+    if request.method == 'POST':
+        raw_identifier = request.POST.get('username', '').strip()
+        matched_user = User.objects.filter(
+            Q(username__iexact=raw_identifier) | Q(email__iexact=raw_identifier)
+        ).first()
+
+        logger.info(
+            f"Staff portal login attempt: identifier='{raw_identifier}', "
+            f"user_found={bool(matched_user)}, "
+            f"is_staff={matched_user.is_staff if matched_user else False}"
+        )
+
+        form = AuthenticationForm(request, data=request.POST)
+        if form.is_valid():
+            user = form.get_user()
+            # Explicit role check: only staff or superusers can log in through the staff portal
+            if not (user.is_staff or user.is_superuser):
+                logger.warning(
+                    f"Staff portal login rejected for non-staff user '{user.username}' (id={user.id})"
+                )
+                messages.error(
+                    request,
+                    "Access restricted. This portal is for authorized hospital staff only. Patients must use the Patient Login."
+                )
+                return render(request, 'appointments/staff_login.html', {
+                    'form': form,
+                    'next': request.POST.get('next') or request.GET.get('next', '')
+                })
+
+            login(request, user)
+            logger.info(f"Staff user '{user.username}' authenticated successfully to staff portal.")
+            messages.success(request, f"Welcome to the Hospital Staff Portal, {user.first_name or user.username}!")
+
+            next_url = request.GET.get('next') or request.POST.get('next')
+            if next_url and url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}):
+                if next_url not in ['/dashboard/', reverse('patient_dashboard')]:
+                    return redirect(next_url)
+
+            return redirect('staff_dashboard')
+        else:
+            logger.warning(f"Staff login rejected: invalid credentials for identifier='{raw_identifier}'")
+            messages.error(request, "Invalid username or password. Please try again.")
+    else:
+        form = AuthenticationForm()
+
+    return render(request, 'appointments/staff_login.html', {
         'form': form,
         'next': request.POST.get('next') or request.GET.get('next', '')
     })

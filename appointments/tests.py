@@ -1047,11 +1047,74 @@ class HospitalPortalViewTests(TestCase):
         self.assertEqual(post_resp.url, reverse('home'))
 
     def test_navbar_staff_login_option_for_unauthenticated_user(self):
-        """Navbar displays a clearly visible Staff Login link pointing to /login/ for unauthenticated visitors."""
+        """Navbar displays a clearly visible Staff Login link pointing to /staff/login/ for unauthenticated visitors."""
         response = self.client.get(reverse('home'))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, 'Staff Login')
-        self.assertContains(response, f'href="{reverse("patient_login")}"')
+        self.assertContains(response, f'href="{reverse("staff_login")}"')
+
+    def test_staff_login_view_get_renders_portal(self):
+        """GET /staff/login/ renders dedicated staff portal with appropriate badges and form."""
+        response = self.client.get(reverse('staff_login'))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Staff Portal')
+        self.assertContains(response, 'Authorized Personnel Only')
+        self.assertContains(response, 'Staff Username or Email')
+        self.assertContains(response, 'Patient Sign In')
+
+    def test_staff_login_view_success_redirects_to_staff_dashboard(self):
+        """Staff user logging in via /staff/login/ is authenticated and redirected to /staff/dashboard/."""
+        response = self.client.post(reverse('staff_login'), {
+            'username': 'staff_user',
+            'password': 'Password123'
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('staff_dashboard'))
+
+        # Verify session is authenticated as staff
+        dashboard_resp = self.client.get(reverse('staff_dashboard'))
+        self.assertEqual(dashboard_resp.status_code, 200)
+
+    def test_staff_login_view_invalid_credentials_rejected(self):
+        """Staff login with wrong password displays error and does not authenticate."""
+        response = self.client.post(reverse('staff_login'), {
+            'username': 'staff_user',
+            'password': 'WrongStaffPassword!'
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Invalid username or password")
+        self.assertFalse(response.wsgi_request.user.is_authenticated)
+
+    def test_staff_login_view_rejects_non_staff_patient(self):
+        """Regular patient user attempting to log in via staff portal is rejected with access restricted message."""
+        response = self.client.post(reverse('staff_login'), {
+            'username': 'john_patient',
+            'password': 'Password123'
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Access restricted. This portal is for authorized hospital staff only.")
+        self.assertFalse(response.wsgi_request.user.is_authenticated)
+
+    def test_staff_login_view_already_authenticated_staff_redirects(self):
+        """Authenticated staff member visiting /staff/login/ is redirected directly to staff dashboard."""
+        self.client.login(username="staff_user", password="Password123")
+        response = self.client.get(reverse('staff_login'))
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('staff_dashboard'))
+
+    def test_staff_login_view_already_authenticated_patient_redirects(self):
+        """Authenticated patient member visiting /staff/login/ is redirected to patient dashboard."""
+        self.client.login(username="john_patient", password="Password123")
+        response = self.client.get(reverse('staff_login'))
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('patient_dashboard'))
+
+    def test_unauthenticated_staff_dashboard_access_redirects_to_staff_login(self):
+        """Unauthenticated visitor accessing /staff/dashboard/ is redirected to /staff/login/?next=..."""
+        response = self.client.get(reverse('staff_dashboard'))
+        self.assertEqual(response.status_code, 302)
+        expected_redirect = f"{reverse('staff_login')}?next={reverse('staff_dashboard')}"
+        self.assertEqual(response.url, expected_redirect)
 
     def test_navbar_hides_staff_login_for_authenticated_users(self):
         """Navbar hides Staff Login when a user (patient or staff) is logged in."""

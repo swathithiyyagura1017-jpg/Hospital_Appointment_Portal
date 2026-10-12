@@ -1,0 +1,88 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Staff Login - MediCare Portal{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6 col-lg-5">
+            <div class="card border-0 shadow-sm rounded-4 p-4 p-md-5 bg-white">
+                <div class="text-center mb-4">
+                    <div class="brand-icon mx-auto mb-2 bg-warning-subtle text-warning border border-warning" style="width: 54px; height: 54px; border-radius: 14px; display: flex; align-items: center; justify-content: center;">
+                        <i class="bi bi-shield-lock-fill fs-3 text-warning"></i>
+                    </div>
+                    <h3 class="fw-bold mb-1">Staff Portal</h3>
+                    <p class="text-muted small">Hospital Medical Staff & Administrator Sign In</p>
+                    <span class="badge bg-warning text-dark px-3 py-1 rounded-pill small">
+                        <i class="bi bi-lock me-1"></i>Authorized Personnel Only
+                    </span>
+                </div>
+
+                {% if user.is_authenticated %}
+                <div class="alert alert-info py-2 px-3 small d-flex justify-content-between align-items-center mb-3">
+                    <div>
+                        <i class="bi bi-info-circle me-1"></i> Signed in as <strong>{{ user.username }}</strong>
+                    </div>
+                    <a href="{% if user.is_staff or user.is_superuser %}{% url 'staff_dashboard' %}{% else %}{% url 'patient_dashboard' %}{% endif %}" class="btn btn-sm btn-primary py-0">
+                        Dashboard
+                    </a>
+                </div>
+                {% endif %}
+
+                <form method="POST" action="{% url 'staff_login' %}">
+                    {% csrf_token %}
+                    {% if next %}
+                        <input type="hidden" name="next" value="{{ next }}">
+                    {% endif %}
+
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger py-2 small">
+                            {% for error in form.non_field_errors %}
+                                <div>{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold">Staff Username or Email</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light"><i class="bi bi-person-badge"></i></span>
+                            <input type="text" name="username" value="{{ form.username.value|default:'' }}" class="form-control {% if form.username.errors %}is-invalid{% endif %}" placeholder="Enter staff username or email" required autofocus>
+                        </div>
+                        {% if form.username.errors %}
+                            <div class="text-danger small mt-1">
+                                {% for error in form.username.errors %}<div>{{ error }}</div>{% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label small fw-semibold">Password</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light"><i class="bi bi-key"></i></span>
+                            <input type="password" name="password" class="form-control {% if form.password.errors %}is-invalid{% endif %}" placeholder="Enter password" required>
+                        </div>
+                        {% if form.password.errors %}
+                            <div class="text-danger small mt-1">
+                                {% for error in form.password.errors %}<div>{{ error }}</div>{% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="d-grid mb-3">
+                        <button type="submit" class="btn btn-warning py-2 shadow-sm fw-semibold text-dark">
+                            <i class="bi bi-shield-check me-1"></i> Sign In to Staff Dashboard
+                        </button>
+                    </div>
+
+                    <div class="text-center small text-muted">
+                        Are you a patient? 
+                        <a href="{% url 'patient_login' %}" class="text-primary fw-semibold">Patient Sign In</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

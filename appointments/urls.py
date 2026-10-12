@@ -24,6 +24,7 @@ urlpatterns = [
     path('activate-staff/', views.activate_staff_view, name='activate_staff'),
 
     # Authentication
+    path('staff/login/', views.staff_login_view, name='staff_login'),
     path('register/', views.patient_register_view, name='patient_register'),
     path('login/', views.patient_login_view, name='patient_login'),
     path('logout/', views.patient_logout_view, name='patient_logout'),
