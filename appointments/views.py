@@ -184,7 +184,7 @@ def book_appointment_view(request):
         selected_doctor = Doctor.objects.filter(pk=doctor_id, active_status=True).first()
 
     patient_profile = None
-    if request.user.is_authenticated and hasattr(request.user, 'patient_profile'):
+    if request.user.is_authenticated and not (request.user.is_staff or request.user.is_superuser) and hasattr(request.user, 'patient_profile'):
         patient_profile = request.user.patient_profile
 
     if request.method == 'POST':
@@ -212,7 +212,7 @@ def book_appointment_view(request):
                         'phone': p_phone,
                         'gender': p_gender,
                         'date_of_birth': p_dob,
-                        'user': request.user if request.user.is_authenticated else None
+                        'user': request.user if (request.user.is_authenticated and not (request.user.is_staff or request.user.is_superuser)) else None
                     }
                 )
 
@@ -233,6 +233,15 @@ def book_appointment_view(request):
                 appointment.patient = patient
                 appointment.status = AppointmentStatusChoices.PENDING
                 appointment.save()
+
+                # Authorize this booking session to view its confirmation receipt
+                confirmed_booking_ids = request.session.get('confirmed_booking_ids', [])
+                if not isinstance(confirmed_booking_ids, list):
+                    confirmed_booking_ids = []
+                if appointment.id not in confirmed_booking_ids:
+                    confirmed_booking_ids.append(appointment.id)
+                request.session['confirmed_booking_ids'] = confirmed_booking_ids
+                request.session['last_booking_id'] = appointment.id
 
                 messages.success(
                     request,
@@ -257,8 +266,35 @@ def book_appointment_view(request):
 
 
 def appointment_success_view(request, pk):
-    """Booking Confirmation Page"""
+    """Booking Confirmation Page - Protected against IDOR"""
     appointment = get_object_or_404(Appointment, pk=pk)
+
+    # Authorization rules:
+    # 1. Hospital staff or superuser
+    # 2. Authenticated patient owner of this appointment
+    # 3. Verified session that legitimately booked this specific appointment
+    is_staff = request.user.is_authenticated and (request.user.is_staff or request.user.is_superuser)
+
+    is_owner = False
+    if request.user.is_authenticated:
+        if appointment.patient and appointment.patient.user == request.user:
+            is_owner = True
+        elif hasattr(request.user, 'patient_profile') and appointment.patient == request.user.patient_profile:
+            is_owner = True
+
+    confirmed_ids = request.session.get('confirmed_booking_ids', [])
+    is_session_verified = (
+        isinstance(confirmed_ids, list) and appointment.id in confirmed_ids
+    ) or (request.session.get('last_booking_id') == appointment.id)
+
+    if not (is_staff or is_owner or is_session_verified):
+        messages.error(request, "Access restricted. You do not have permission to view this booking receipt.")
+        if request.user.is_authenticated:
+            if request.user.is_staff or request.user.is_superuser:
+                return redirect('staff_dashboard')
+            return redirect('patient_dashboard')
+        return redirect('home')
+
     context = {
         'appointment': appointment,
     }
@@ -270,6 +306,10 @@ def appointment_success_view(request, pk):
 @login_required
 def patient_dashboard_view(request):
     """Patient Dashboard showing upcoming & past appointments, and reports"""
+    # Redirect staff and superuser accounts to staff dashboard; never auto-create Patient for staff
+    if request.user.is_staff or request.user.is_superuser:
+        return redirect('staff_dashboard')
+
     # Get or create patient profile for logged in user
     patient, _ = Patient.objects.get_or_create(
         user=request.user,
@@ -312,14 +352,23 @@ def cancel_appointment_view(request, pk):
     """Patient or Staff can cancel an appointment securely via POST"""
     if request.method != 'POST':
         messages.error(request, "Invalid request method for appointment cancellation. POST is required.")
+        if request.user.is_staff or request.user.is_superuser:
+            return redirect('staff_dashboard')
         return redirect('patient_dashboard')
 
     appointment = get_object_or_404(Appointment, pk=pk)
 
     # Permission check: must be the patient owner or hospital staff
-    is_owner = hasattr(request.user, 'patient_profile') and appointment.patient == request.user.patient_profile
-    if not (is_owner or request.user.is_staff):
+    is_staff = request.user.is_staff or request.user.is_superuser
+    is_owner = (
+        not is_staff
+        and hasattr(request.user, 'patient_profile')
+        and appointment.patient == request.user.patient_profile
+    )
+    if not (is_owner or is_staff):
         messages.error(request, "You are not authorized to cancel this appointment.")
+        if is_staff:
+            return redirect('staff_dashboard')
         return redirect('patient_dashboard')
 
     if appointment.status == AppointmentStatusChoices.COMPLETED:
@@ -331,7 +380,7 @@ def cancel_appointment_view(request, pk):
         appointment.save()
         messages.success(request, f"Appointment #{appointment.id} has been successfully cancelled.")
 
-    if request.user.is_staff:
+    if is_staff:
         return redirect('staff_dashboard')
     return redirect('patient_dashboard')
 
@@ -503,9 +552,16 @@ def medical_report_detail_view(request, pk):
     report = get_object_or_404(MedicalReport, pk=pk)
 
     # Auth check: patient owner or hospital staff
-    is_owner = hasattr(request.user, 'patient_profile') and report.patient == request.user.patient_profile
-    if not (is_owner or request.user.is_staff):
+    is_staff = request.user.is_staff or request.user.is_superuser
+    is_owner = (
+        not is_staff
+        and hasattr(request.user, 'patient_profile')
+        and report.patient == request.user.patient_profile
+    )
+    if not (is_owner or is_staff):
         messages.error(request, "You are not authorized to view this medical report.")
+        if is_staff:
+            return redirect('staff_dashboard')
         return redirect('patient_dashboard')
 
     context = {
@@ -520,6 +576,8 @@ def medical_report_detail_view(request, pk):
 def patient_register_view(request):
     """Register a new patient account using Django authentication"""
     if request.user.is_authenticated:
+        if request.user.is_staff or request.user.is_superuser:
+            return redirect('staff_dashboard')
         return redirect('patient_dashboard')
 
     if request.method == 'POST':
@@ -535,40 +593,29 @@ def patient_register_view(request):
             blood = form.cleaned_data.get('blood_group', '')
             address = form.cleaned_data.get('address', '')
 
-            # Create User using Django auth
+            # Create User using Django auth - strictly ensure is_staff=False, is_superuser=False
             user = User.objects.create_user(
                 username=username,
                 email=email,
                 password=password,
                 first_name=name.split()[0] if name else '',
-                last_name=" ".join(name.split()[1:]) if len(name.split()) > 1 else ''
+                last_name=" ".join(name.split()[1:]) if len(name.split()) > 1 else '',
+                is_staff=False,
+                is_superuser=False
             )
 
-            # Create or update Patient record linked to User
-            patient, created = Patient.objects.get_or_create(
+            # Create dedicated Patient record strictly linked to this User.
+            # Never transfer or hijack existing patient records based solely on email matching.
+            patient = Patient.objects.create(
+                user=user,
+                name=name,
                 email=email,
-                defaults={
-                    'user': user,
-                    'name': name,
-                    'phone': phone,
-                    'gender': gender,
-                    'date_of_birth': dob,
-                    'blood_group': blood,
-                    'address': address,
-                }
+                phone=phone,
+                gender=gender,
+                date_of_birth=dob,
+                blood_group=blood,
+                address=address,
             )
-            if not created:
-                patient.user = user
-                patient.name = name
-                patient.phone = phone
-                patient.gender = gender
-                if dob:
-                    patient.date_of_birth = dob
-                if blood:
-                    patient.blood_group = blood
-                if address:
-                    patient.address = address
-                patient.save()
 
             login(request, user, backend='appointments.backends.EmailOrUsernameModelBackend')
             logger.info(
@@ -611,6 +658,8 @@ def patient_login_view(request):
             messages.success(request, f"Welcome back, {user.first_name or user.username}!")
             next_url = request.GET.get('next') or request.POST.get('next')
             if next_url and url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}):
+                if (user.is_staff or user.is_superuser) and next_url in ['/dashboard/', reverse('patient_dashboard')]:
+                    return redirect('staff_dashboard')
                 return redirect(next_url)
             if user.is_staff or user.is_superuser:
                 return redirect('staff_dashboard')
@@ -633,59 +682,22 @@ def patient_login_view(request):
 
 
 def patient_logout_view(request):
-    """Secure logout view for authenticated users"""
+    """Secure logout view for authenticated users (requires POST method)"""
+    if request.method != 'POST':
+        messages.warning(request, "Invalid request method for logout. POST is required.")
+        return redirect('home')
+
     if request.user.is_authenticated:
         logout(request)
         messages.info(request, "You have been securely logged out.")
     return redirect('home')
 
 
-@login_required
 def activate_staff_view(request):
     """
-    Secure, temporary one-time staff activation endpoint.
-    Security rules:
-    - Disabled (returns 404) if STAFF_ACTIVATION_KEY is not set or empty in environment.
-    - Requires the user to be logged in (@login_required).
-    - Submitted username must match request.user.username (prevents activating other accounts).
-    - Secret key compared securely using constant-time secrets.compare_digest.
-    - Grants is_staff=True, is_superuser=False.
-    - Preserves passwords, patient profiles, doctors, and appointments.
+    Staff activation endpoint has been decommissioned.
+    Returns HTTP 404 to ensure no HTTP request can activate staff or superuser privileges.
+    Staff accounts must be created exclusively via the secure management command or Django admin.
     """
-    server_key = os.environ.get('STAFF_ACTIVATION_KEY')
-    if not server_key or not server_key.strip():
-        raise Http404("Staff activation is disabled on this server.")
-
-    if request.method == 'POST':
-        submitted_username = request.POST.get('username', '').strip()
-        submitted_key = request.POST.get('activation_key', '').strip()
-
-        # Enforce that the submitted username matches the currently authenticated user
-        if not submitted_username or submitted_username != request.user.username:
-            messages.error(request, "Permission denied: You can only activate staff access for your own authenticated account.")
-            return render(request, 'appointments/activate_staff.html')
-
-        # Secure constant-time comparison against the environment secret
-        if not secrets.compare_digest(submitted_key, server_key.strip()):
-            messages.error(request, "Invalid activation secret key. Access denied.")
-            return render(request, 'appointments/activate_staff.html')
-
-        # If user is already staff, inform and route to dashboard
-        if request.user.is_staff:
-            messages.info(request, "Your account already has staff privileges.")
-            return redirect('staff_dashboard')
-
-        # Grant staff privileges without altering passwords, superuser, or other data
-        user = request.user
-        user.is_staff = True
-        user.is_superuser = False
-        user.save(update_fields=['is_staff', 'is_superuser'])
-
-        messages.success(
-            request,
-            f"Staff privileges successfully activated for '{user.username}'! Welcome to the Staff Management Portal."
-        )
-        return redirect('staff_dashboard')
-
-    return render(request, 'appointments/activate_staff.html')
+    raise Http404("Staff activation endpoint has been permanently disabled.")
 

@@ -1,5 +1,7 @@
 from django import forms
 from django.contrib.auth.models import User
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils import timezone
 from .models import Doctor, Patient, Appointment, MedicalReport, TIME_SLOTS, DepartmentChoices, AppointmentStatusChoices
 
@@ -219,7 +221,7 @@ class PatientRegistrationForm(forms.Form):
     )
     password = forms.CharField(
         required=True,
-        widget=forms.PasswordInput(attrs={'class': 'form-control', 'placeholder': 'Password (min 6 characters)'})
+        widget=forms.PasswordInput(attrs={'class': 'form-control', 'placeholder': 'Password (min 8 characters)'})
     )
     confirm_password = forms.CharField(
         required=True,
@@ -227,23 +229,52 @@ class PatientRegistrationForm(forms.Form):
     )
 
     def clean_username(self):
-        username = self.cleaned_data.get('username')
+        username = self.cleaned_data.get('username', '').strip()
+        if not username:
+            raise forms.ValidationError("Username cannot be blank.")
         if User.objects.filter(username__iexact=username).exists():
             raise forms.ValidationError("Username already taken. Please choose another.")
         return username
 
+    def clean_name(self):
+        name = self.cleaned_data.get('name', '').strip()
+        if not name:
+            raise forms.ValidationError("Full Name cannot be blank.")
+        return name
+
+    def clean_phone(self):
+        phone = self.cleaned_data.get('phone', '').strip()
+        if not phone:
+            raise forms.ValidationError("Phone number cannot be blank.")
+        return phone
+
     def clean_email(self):
         email = self.cleaned_data.get('email', '').strip().lower()
+        if not email:
+            raise forms.ValidationError("Email address cannot be blank.")
         if User.objects.filter(email__iexact=email).exists():
-            raise forms.ValidationError("An account with this email address already exists.")
+            raise forms.ValidationError("An account with this email address already exists. Please log in.")
+        if Patient.objects.filter(email__iexact=email).exists():
+            raise forms.ValidationError(
+                "This email address is already associated with existing hospital patient records. "
+                "To protect patient privacy, existing records cannot be claimed online without hospital staff verification."
+            )
         return email
 
     def clean(self):
         cleaned_data = super().clean()
         p1 = cleaned_data.get('password')
         p2 = cleaned_data.get('confirm_password')
-        if p1 and p2 and p1 != p2:
-            raise forms.ValidationError("Passwords do not match.")
-        if p1 and len(p1) < 6:
-            raise forms.ValidationError("Password must be at least 6 characters long.")
+        username = cleaned_data.get('username')
+        email = cleaned_data.get('email')
+
+        if p1 and p2:
+            if p1 != p2:
+                self.add_error('confirm_password', "Passwords do not match.")
+            else:
+                dummy_user = User(username=username, email=email) if username else None
+                try:
+                    validate_password(p1, user=dummy_user)
+                except DjangoValidationError as error:
+                    self.add_error('password', error)
         return cleaned_data

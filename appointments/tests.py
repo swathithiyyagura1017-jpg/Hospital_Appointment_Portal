@@ -337,8 +337,8 @@ class HospitalPortalViewTests(TestCase):
             'email': 'different.email@example.com',
             'phone': '+1-555-9999',
             'gender': 'Male',
-            'password': 'Password123',
-            'confirm_password': 'Password123',
+            'password': 'StrongPassword123!',
+            'confirm_password': 'StrongPassword123!',
         }
         response = self.client.post(reverse('patient_register'), data=reg_data)
         self.assertEqual(response.status_code, 200)
@@ -564,6 +564,7 @@ class HospitalPortalViewTests(TestCase):
             reason="Heart checkup",
             status=AppointmentStatusChoices.PENDING
         )
+        self.client.login(username="john_patient", password="Password123")
         response = self.client.get(reverse('appointment_success', kwargs={'pk': app.pk}))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, f"#{app.id}")
@@ -745,85 +746,32 @@ class HospitalPortalViewTests(TestCase):
 
         del os.environ['STAFF_USERNAME']
 
-    def test_activate_staff_disabled_when_env_key_missing(self):
-        """When STAFF_ACTIVATION_KEY is not set in environment, endpoint returns 404."""
-        old_key = os.environ.get('STAFF_ACTIVATION_KEY')
-        if 'STAFF_ACTIVATION_KEY' in os.environ:
-            del os.environ['STAFF_ACTIVATION_KEY']
-
-        self.client.login(username="john_patient", password="Password123")
-        # GET request returns 404
+    def test_activate_staff_endpoint_permanently_returns_404_unauthenticated(self):
+        """Unauthenticated GET and POST requests to /activate-staff/ return 404."""
         resp_get = self.client.get(reverse('activate_staff'))
         self.assertEqual(resp_get.status_code, 404)
 
-        # POST request returns 404
         resp_post = self.client.post(reverse('activate_staff'), {
             'username': 'john_patient',
-            'activation_key': 'any_key'
+            'activation_key': 'any_secret_attempt'
         })
         self.assertEqual(resp_post.status_code, 404)
 
-        if old_key is not None:
-            os.environ['STAFF_ACTIVATION_KEY'] = old_key
-
-    def test_activate_staff_requires_login(self):
-        """Unauthenticated requests are redirected to login."""
-        os.environ['STAFF_ACTIVATION_KEY'] = 'SuperSecretKey999!'
-        resp = self.client.get(reverse('activate_staff'))
-        self.assertEqual(resp.status_code, 302)
-        self.assertIn(reverse('patient_login'), resp.url)
-        del os.environ['STAFF_ACTIVATION_KEY']
-
-    def test_activate_staff_rejects_wrong_secret(self):
-        """Rejects submission when activation key does not match."""
-        os.environ['STAFF_ACTIVATION_KEY'] = 'CorrectKey123!'
+    def test_activate_staff_endpoint_permanently_returns_404_authenticated(self):
+        """Authenticated patient GET and POST requests to /activate-staff/ return 404 and cannot promote user."""
         self.client.login(username="john_patient", password="Password123")
+        resp_get = self.client.get(reverse('activate_staff'))
+        self.assertEqual(resp_get.status_code, 404)
 
-        resp = self.client.post(reverse('activate_staff'), {
+        resp_post = self.client.post(reverse('activate_staff'), {
             'username': 'john_patient',
-            'activation_key': 'WrongKey456!'
+            'activation_key': 'any_secret_attempt'
         })
-        self.assertEqual(resp.status_code, 200)
-        self.assertContains(resp, "Invalid activation secret key")
+        self.assertEqual(resp_post.status_code, 404)
 
         self.patient_user.refresh_from_db()
         self.assertFalse(self.patient_user.is_staff)
-        del os.environ['STAFF_ACTIVATION_KEY']
-
-    def test_activate_staff_rejects_mismatched_username(self):
-        """Rejects attempt to activate a username other than the authenticated user."""
-        os.environ['STAFF_ACTIVATION_KEY'] = 'CorrectKey123!'
-        self.client.login(username="john_patient", password="Password123")
-
-        resp = self.client.post(reverse('activate_staff'), {
-            'username': 'other_random_user',
-            'activation_key': 'CorrectKey123!'
-        })
-        self.assertEqual(resp.status_code, 200)
-        self.assertContains(resp, "Permission denied")
-
-        self.patient_user.refresh_from_db()
-        self.assertFalse(self.patient_user.is_staff)
-        del os.environ['STAFF_ACTIVATION_KEY']
-
-    def test_activate_staff_success(self):
-        """Successful activation sets is_staff=True, is_superuser=False, and preserves password."""
-        os.environ['STAFF_ACTIVATION_KEY'] = 'UniqueActivationKey2026!'
-        self.client.login(username="john_patient", password="Password123")
-
-        resp = self.client.post(reverse('activate_staff'), {
-            'username': 'john_patient',
-            'activation_key': 'UniqueActivationKey2026!'
-        })
-        # Redirects directly to staff dashboard
-        self.assertEqual(resp.status_code, 302)
-        self.assertEqual(resp.url, reverse('staff_dashboard'))
-
-        self.patient_user.refresh_from_db()
-        self.assertTrue(self.patient_user.is_staff)
         self.assertFalse(self.patient_user.is_superuser)
-        self.assertTrue(self.patient_user.check_password("Password123"))
-        del os.environ['STAFF_ACTIVATION_KEY']
 
     def test_login_get_displays_form_for_unauthenticated_visitor(self):
         """Unauthenticated GET request to /login/ displays the login form."""
@@ -1158,6 +1106,589 @@ class HospitalPortalViewTests(TestCase):
         blocked_resp = self.client.get(reverse('staff_dashboard'))
         self.assertEqual(blocked_resp.status_code, 302)
         self.assertEqual(blocked_resp.url, reverse('patient_dashboard'))
+
+    def test_appointment_success_anonymous_without_session_is_rejected(self):
+        """Anonymous user without a verified booking session cannot view appointment receipt (IDOR protection)."""
+        app = Appointment.objects.create(
+            patient=self.patient,
+            doctor=self.doc_cardio,
+            date=self.today + timedelta(days=2),
+            time_slot="10:00-10:30",
+            reason="Cardio consultation",
+            status=AppointmentStatusChoices.PENDING
+        )
+        response = self.client.get(reverse('appointment_success', kwargs={'pk': app.pk}))
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('home'))
+
+    def test_appointment_success_verified_booking_session_succeeds(self):
+        """Anonymous user who legitimately booked through the form can view their confirmation receipt."""
+        booking_data = {
+            'doctor': self.doc_cardio.id,
+            'date': (self.today + timedelta(days=5)).isoformat(),
+            'time_slot': '14:00-14:30',
+            'reason': 'Guest booking receipt access test',
+            'patient_name': 'Guest Patient',
+            'patient_email': 'guest.patient@example.com',
+            'patient_phone': '+1-555-8833',
+            'patient_gender': 'Other'
+        }
+        post_resp = self.client.post(reverse('book_appointment'), data=booking_data)
+        self.assertEqual(post_resp.status_code, 302)
+
+        # Access the confirmation receipt using the legitimate booking session
+        receipt_resp = self.client.get(post_resp.url)
+        self.assertEqual(receipt_resp.status_code, 200)
+        self.assertContains(receipt_resp, "Appointment Successfully Booked!")
+        self.assertContains(receipt_resp, "Guest booking receipt access test")
+
+    def test_appointment_success_session_cannot_access_other_appointments(self):
+        """Session authorized for appointment A cannot view appointment B (session boundary enforced)."""
+        app_other = Appointment.objects.create(
+            patient=self.patient,
+            doctor=self.doc_cardio,
+            date=self.today + timedelta(days=3),
+            time_slot="11:00-11:30",
+            reason="Private consultation",
+            status=AppointmentStatusChoices.PENDING
+        )
+        # Establish session with a different appointment ID
+        session = self.client.session
+        session['confirmed_booking_ids'] = [999999]
+        session.save()
+
+        response = self.client.get(reverse('appointment_success', kwargs={'pk': app_other.pk}))
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('home'))
+
+    def test_appointment_success_unrelated_authenticated_patient_is_rejected(self):
+        """Authenticated patient cannot view another patient's booking confirmation receipt."""
+        User.objects.create_user(
+            username="unrelated_patient",
+            password="Password123",
+            email="unrelated@example.com"
+        )
+        app_john = Appointment.objects.create(
+            patient=self.patient,
+            doctor=self.doc_cardio,
+            date=self.today + timedelta(days=2),
+            time_slot="10:00-10:30",
+            reason="John's private checkup",
+            status=AppointmentStatusChoices.PENDING
+        )
+        # Log in as unrelated patient
+        login_success = self.client.login(username="unrelated_patient", password="Password123")
+        self.assertTrue(login_success)
+        response = self.client.get(reverse('appointment_success', kwargs={'pk': app_john.pk}))
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('patient_dashboard'))
+
+    def test_appointment_success_staff_access_succeeds(self):
+        """Hospital staff can access any appointment confirmation receipt."""
+        app = Appointment.objects.create(
+            patient=self.patient,
+            doctor=self.doc_cardio,
+            date=self.today + timedelta(days=2),
+            time_slot="10:00-10:30",
+            reason="Staff oversight test",
+            status=AppointmentStatusChoices.PENDING
+        )
+        self.client.login(username="staff_user", password="Password123")
+        response = self.client.get(reverse('appointment_success', kwargs={'pk': app.pk}))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Staff oversight test")
+
+    def test_logout_get_request_does_not_log_out_user(self):
+        """GET request to logout does not terminate session; POST is required."""
+        self.client.login(username="john_patient", password="Password123")
+
+        # GET request to logout
+        get_resp = self.client.get(reverse('patient_logout'))
+        self.assertEqual(get_resp.status_code, 302)
+        self.assertEqual(get_resp.url, reverse('home'))
+
+        # User is still authenticated and can access their dashboard
+        dash_resp = self.client.get(reverse('patient_dashboard'))
+        self.assertEqual(dash_resp.status_code, 200)
+        self.assertContains(dash_resp, "Welcome, John Doe")
+
+        # POST request legitimately logs the user out
+        post_resp = self.client.post(reverse('patient_logout'))
+        self.assertEqual(post_resp.status_code, 302)
+        self.assertEqual(post_resp.url, reverse('home'))
+
+        # User is now logged out; accessing dashboard redirects to login
+        dash_after_logout = self.client.get(reverse('patient_dashboard'))
+        self.assertEqual(dash_after_logout.status_code, 302)
+        self.assertIn(reverse('patient_login'), dash_after_logout.url)
+
+
+class HospitalPortalRoleAndDataSeparationTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.today = timezone.localdate()
+
+        self.doctor = Doctor.objects.create(
+            name="Alice Hamilton",
+            department=DepartmentChoices.CARDIOLOGY,
+            specialization="Cardiovascular Health",
+            consultation_fee=100.00,
+            active_status=True
+        )
+
+        self.patient_user = User.objects.create_user(
+            username="test_patient_user",
+            password="PatientPassword123!",
+            email="patient.user@hospitalportal.org"
+        )
+        self.patient = Patient.objects.create(
+            user=self.patient_user,
+            name="Test Patient",
+            email="patient.user@hospitalportal.org",
+            phone="+1-555-7711",
+            gender="Female"
+        )
+
+        self.staff_user = User.objects.create_user(
+            username="hospital_staff_user",
+            password="StaffPassword123!",
+            email="staff.user@hospitalportal.org",
+            is_staff=True,
+            is_superuser=False
+        )
+
+        self.superuser = User.objects.create_superuser(
+            username="hospital_super_admin",
+            password="AdminPassword123!",
+            email="admin@hospitalportal.org"
+        )
+
+    def test_staff_accessing_patient_dashboard_redirects_to_staff_dashboard_without_creating_patient(self):
+        """Staff visiting /dashboard/ must redirect to /staff/dashboard/ without creating a Patient record."""
+        self.assertFalse(hasattr(self.staff_user, 'patient_profile'))
+        patient_count_before = Patient.objects.count()
+
+        self.client.login(username="hospital_staff_user", password="StaffPassword123!")
+        response = self.client.get(reverse('patient_dashboard'))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('staff_dashboard'))
+        self.assertEqual(Patient.objects.count(), patient_count_before)
+        self.assertFalse(Patient.objects.filter(user=self.staff_user).exists())
+
+    def test_superuser_accessing_patient_dashboard_redirects_to_staff_dashboard_without_creating_patient(self):
+        """Superuser visiting /dashboard/ must redirect to /staff/dashboard/ without creating a Patient record."""
+        patient_count_before = Patient.objects.count()
+
+        self.client.login(username="hospital_super_admin", password="AdminPassword123!")
+        response = self.client.get(reverse('patient_dashboard'))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('staff_dashboard'))
+        self.assertEqual(Patient.objects.count(), patient_count_before)
+        self.assertFalse(Patient.objects.filter(user=self.superuser).exists())
+
+    def test_patient_can_access_own_dashboard(self):
+        """Authenticated patient successfully accesses their patient dashboard."""
+        self.client.login(username="test_patient_user", password="PatientPassword123!")
+        response = self.client.get(reverse('patient_dashboard'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'appointments/patient_dashboard.html')
+        self.assertContains(response, "Test Patient")
+        self.assertEqual(response.context['patient'], self.patient)
+
+    def test_staff_login_with_next_dashboard_redirects_to_staff_dashboard(self):
+        """Staff login with ?next=/dashboard/ routes to /staff/dashboard/ instead of /dashboard/."""
+        response = self.client.post(reverse('patient_login') + f"?next={reverse('patient_dashboard')}", {
+            'username': 'hospital_staff_user',
+            'password': 'StaffPassword123!'
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('staff_dashboard'))
+
+    def test_staff_booking_appointment_does_not_attach_staff_as_patient_user(self):
+        """When staff books an appointment, the Patient record created is unattached to the staff user."""
+        self.client.login(username="hospital_staff_user", password="StaffPassword123!")
+        booking_data = {
+            'doctor': self.doctor.id,
+            'date': (self.today + timedelta(days=4)).isoformat(),
+            'time_slot': '10:00-10:30',
+            'reason': 'Walk-in booking entered by staff',
+            'patient_name': 'Walk-in Patient',
+            'patient_email': 'walkin.patient@example.com',
+            'patient_phone': '+1-555-9922',
+            'patient_gender': 'Other'
+        }
+        response = self.client.post(reverse('book_appointment'), data=booking_data)
+        self.assertEqual(response.status_code, 302)
+
+        walkin = Patient.objects.get(email='walkin.patient@example.com')
+        self.assertIsNone(walkin.user)
+        self.assertFalse(Patient.objects.filter(user=self.staff_user).exists())
+
+    def test_medical_report_detail_role_separation(self):
+        """Medical report is accessible by the patient owner and staff, but forbidden for unrelated patients."""
+        app = Appointment.objects.create(
+            patient=self.patient,
+            doctor=self.doctor,
+            date=self.today + timedelta(days=2),
+            time_slot="11:00-11:30",
+            reason="Confidential cardiology exam",
+            status=AppointmentStatusChoices.COMPLETED
+        )
+        report = MedicalReport.objects.create(
+            patient=self.patient,
+            doctor=self.doctor,
+            appointment=app,
+            diagnosis="Sinus Bradycardia",
+            prescription="Follow up resting ECG",
+            doctor_notes="Private notes"
+        )
+
+        unrelated_user = User.objects.create_user(
+            username="unrelated_user",
+            password="UnrelatedPassword123!",
+            email="unrelated.user@example.com"
+        )
+        unrelated_patient = Patient.objects.create(
+            user=unrelated_user,
+            name="Unrelated Patient",
+            email="unrelated.user@example.com",
+            phone="+1-555-0044"
+        )
+
+        # 1. Patient owner accesses report -> 200
+        self.client.login(username="test_patient_user", password="PatientPassword123!")
+        owner_resp = self.client.get(reverse('medical_report_detail', kwargs={'pk': report.pk}))
+        self.assertEqual(owner_resp.status_code, 200)
+        self.assertContains(owner_resp, "Sinus Bradycardia")
+
+        # 2. Staff user accesses report -> 200
+        self.client.login(username="hospital_staff_user", password="StaffPassword123!")
+        staff_resp = self.client.get(reverse('medical_report_detail', kwargs={'pk': report.pk}))
+        self.assertEqual(staff_resp.status_code, 200)
+        self.assertContains(staff_resp, "Sinus Bradycardia")
+
+        # 3. Unrelated patient tries to access report -> 302 to patient_dashboard
+        self.client.login(username="unrelated_user", password="UnrelatedPassword123!")
+        unrelated_resp = self.client.get(reverse('medical_report_detail', kwargs={'pk': report.pk}))
+        self.assertEqual(unrelated_resp.status_code, 302)
+        self.assertEqual(unrelated_resp.url, reverse('patient_dashboard'))
+
+    def test_cancel_appointment_role_separation(self):
+        """Unrelated patients cannot cancel another patient's appointment, while staff can."""
+        app = Appointment.objects.create(
+            patient=self.patient,
+            doctor=self.doctor,
+            date=self.today + timedelta(days=3),
+            time_slot="14:00-14:30",
+            reason="Cardiology review",
+            status=AppointmentStatusChoices.CONFIRMED
+        )
+
+        unrelated_user = User.objects.create_user(
+            username="other_patient_user",
+            password="OtherPassword123!",
+            email="other.patient@example.com"
+        )
+        Patient.objects.create(
+            user=unrelated_user,
+            name="Other Patient",
+            email="other.patient@example.com",
+            phone="+1-555-8855"
+        )
+
+        # Unrelated patient attempts to cancel
+        self.client.login(username="other_patient_user", password="OtherPassword123!")
+        cancel_resp = self.client.post(reverse('cancel_appointment', kwargs={'pk': app.pk}))
+        self.assertEqual(cancel_resp.status_code, 302)
+        self.assertEqual(cancel_resp.url, reverse('patient_dashboard'))
+
+        app.refresh_from_db()
+        self.assertEqual(app.status, AppointmentStatusChoices.CONFIRMED)
+
+        # Staff cancels appointment
+        self.client.login(username="hospital_staff_user", password="StaffPassword123!")
+        staff_cancel_resp = self.client.post(reverse('cancel_appointment', kwargs={'pk': app.pk}))
+        self.assertEqual(staff_cancel_resp.status_code, 302)
+        self.assertEqual(staff_cancel_resp.url, reverse('staff_dashboard'))
+
+        app.refresh_from_db()
+        self.assertEqual(app.status, AppointmentStatusChoices.CANCELLED)
+
+    def test_patient_register_view_redirects_authenticated_staff_to_staff_dashboard(self):
+        """Authenticated staff navigating to /register/ is redirected to /staff/dashboard/."""
+        self.client.login(username="hospital_staff_user", password="StaffPassword123!")
+        response = self.client.get(reverse('patient_register'))
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('staff_dashboard'))
+
+
+class HospitalPortalSecurityAndAuthenticationTests(TestCase):
+    def setUp(self):
+        self.client = Client()
+        self.today = timezone.localdate()
+
+        self.doctor = Doctor.objects.create(
+            name="Gregory House",
+            department=DepartmentChoices.NEUROLOGY,
+            specialization="Diagnostic Medicine",
+            consultation_fee=150.00,
+            active_status=True
+        )
+
+        self.existing_patient_user = User.objects.create_user(
+            username="existing_patient",
+            password="SecurePassword2026!#$",
+            email="existing.patient@example.com"
+        )
+        self.existing_patient = Patient.objects.create(
+            user=self.existing_patient_user,
+            name="Existing Patient",
+            email="existing.patient@example.com",
+            phone="+1-555-1010",
+            gender="Female"
+        )
+
+    def test_registration_weak_password_rejected_too_short(self):
+        """Registration with short password (< 8 chars) fails Django's MinimumLengthValidator."""
+        reg_data = {
+            'username': 'new_user_1',
+            'name': 'New User One',
+            'email': 'new.user1@example.com',
+            'phone': '+1-555-0101',
+            'gender': 'Male',
+            'password': 'short',
+            'confirm_password': 'short',
+        }
+        response = self.client.post(reverse('patient_register'), data=reg_data)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "This password is too short")
+        self.assertFalse(User.objects.filter(username='new_user_1').exists())
+
+    def test_registration_weak_password_rejected_too_common(self):
+        """Registration with common password fails Django's CommonPasswordValidator."""
+        reg_data = {
+            'username': 'new_user_2',
+            'name': 'New User Two',
+            'email': 'new.user2@example.com',
+            'phone': '+1-555-0102',
+            'gender': 'Female',
+            'password': 'password123',
+            'confirm_password': 'password123',
+        }
+        response = self.client.post(reverse('patient_register'), data=reg_data)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "This password is too common")
+        self.assertFalse(User.objects.filter(username='new_user_2').exists())
+
+    def test_registration_weak_password_rejected_entirely_numeric(self):
+        """Registration with numeric password fails Django's NumericPasswordValidator."""
+        reg_data = {
+            'username': 'new_user_3',
+            'name': 'New User Three',
+            'email': 'new.user3@example.com',
+            'phone': '+1-555-0103',
+            'gender': 'Other',
+            'password': '123456789012',
+            'confirm_password': '123456789012',
+        }
+        response = self.client.post(reverse('patient_register'), data=reg_data)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "This password is entirely numeric")
+        self.assertFalse(User.objects.filter(username='new_user_3').exists())
+
+    def test_registration_weak_password_rejected_similar_to_username(self):
+        """Registration with password similar to username fails UserAttributeSimilarityValidator."""
+        reg_data = {
+            'username': 'richard_feynman',
+            'name': 'Richard Feynman',
+            'email': 'richard.feynman@example.com',
+            'phone': '+1-555-0104',
+            'gender': 'Male',
+            'password': 'richard_feynman2026',
+            'confirm_password': 'richard_feynman2026',
+        }
+        response = self.client.post(reverse('patient_register'), data=reg_data)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "The password is too similar to the username")
+        self.assertFalse(User.objects.filter(username='richard_feynman').exists())
+
+    def test_registration_passwords_mismatch(self):
+        """Registration with mismatched passwords fails validation."""
+        reg_data = {
+            'username': 'mismatch_user',
+            'name': 'Mismatch User',
+            'email': 'mismatch@example.com',
+            'phone': '+1-555-0105',
+            'gender': 'Male',
+            'password': 'ValidPassword2026!#',
+            'confirm_password': 'DifferentPassword2026!#',
+        }
+        response = self.client.post(reverse('patient_register'), data=reg_data)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Passwords do not match")
+        self.assertFalse(User.objects.filter(username='mismatch_user').exists())
+
+    def test_registration_valid_password_succeeds(self):
+        """Registration with valid, strong password creates user with hashed password and logs in."""
+        reg_data = {
+            'username': 'strong_user',
+            'name': 'Strong User',
+            'email': 'strong.user@example.com',
+            'phone': '+1-555-0106',
+            'gender': 'Female',
+            'password': 'ComplexPassword2026!#$',
+            'confirm_password': 'ComplexPassword2026!#$',
+        }
+        response = self.client.post(reverse('patient_register'), data=reg_data)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse('patient_dashboard'))
+
+        user = User.objects.get(username='strong_user')
+        self.assertTrue(user.check_password('ComplexPassword2026!#$'))
+        self.assertFalse(user.is_staff)
+        self.assertFalse(user.is_superuser)
+
+        patient = Patient.objects.get(user=user)
+        self.assertEqual(patient.email, 'strong.user@example.com')
+
+    def test_registration_attempt_to_claim_existing_patient_email_is_blocked(self):
+        """Attacker cannot register an existing patient's email to hijack their medical records."""
+        # Setup guest patient without user account
+        guest_patient = Patient.objects.create(
+            name="Confidential Walkin",
+            email="confidential.walkin@example.com",
+            phone="+1-555-8899",
+            gender="Female"
+        )
+        app = Appointment.objects.create(
+            patient=guest_patient,
+            doctor=self.doctor,
+            date=self.today + timedelta(days=2),
+            time_slot="10:00-10:30",
+            reason="Sensitive medical issue",
+            status=AppointmentStatusChoices.CONFIRMED
+        )
+        report = MedicalReport.objects.create(
+            patient=guest_patient,
+            doctor=self.doctor,
+            appointment=app,
+            diagnosis="Confidential Diagnosis",
+            prescription="Confidential Medication"
+        )
+
+        # Attacker attempts to register with the guest patient's email
+        reg_data = {
+            'username': 'attacker_user',
+            'name': 'Attacker Account',
+            'email': 'confidential.walkin@example.com',
+            'phone': '+1-555-0666',
+            'gender': 'Other',
+            'password': 'AttackerPassword2026!#$',
+            'confirm_password': 'AttackerPassword2026!#$',
+        }
+        response = self.client.post(reverse('patient_register'), data=reg_data)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "associated with existing hospital patient records")
+
+        # Confirm attacker account was NOT created
+        self.assertFalse(User.objects.filter(username='attacker_user').exists())
+
+        # Confirm guest patient remains untransferred and safe
+        guest_patient.refresh_from_db()
+        self.assertIsNone(guest_patient.user)
+        self.assertEqual(guest_patient.name, "Confidential Walkin")
+        self.assertEqual(app.patient, guest_patient)
+        self.assertEqual(report.patient, guest_patient)
+
+    def test_registration_duplicate_username_case_insensitive(self):
+        """Registration rejects duplicate username regardless of case."""
+        reg_data = {
+            'username': 'EXISTING_PATIENT',
+            'name': 'Duplicate Case User',
+            'email': 'different.email@example.com',
+            'phone': '+1-555-0107',
+            'gender': 'Male',
+            'password': 'ValidPassword2026!#$',
+            'confirm_password': 'ValidPassword2026!#$',
+        }
+        response = self.client.post(reverse('patient_register'), data=reg_data)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Username already taken")
+        self.assertFalse(User.objects.filter(email='different.email@example.com').exists())
+
+    def test_registration_duplicate_email_case_insensitive(self):
+        """Registration rejects duplicate email regardless of case."""
+        reg_data = {
+            'username': 'unique_user_99',
+            'name': 'Duplicate Email User',
+            'email': 'EXISTING.PATIENT@EXAMPLE.COM',
+            'phone': '+1-555-0108',
+            'gender': 'Male',
+            'password': 'ValidPassword2026!#$',
+            'confirm_password': 'ValidPassword2026!#$',
+        }
+        response = self.client.post(reverse('patient_register'), data=reg_data)
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "An account with this email address already exists")
+        self.assertFalse(User.objects.filter(username='unique_user_99').exists())
+
+    def test_registration_normalizes_whitespace_in_username_and_email(self):
+        """Registration cleanly strips whitespace from username and email."""
+        reg_data = {
+            'username': '  clean_spaced_user  ',
+            'name': 'Clean Spaced User',
+            'email': '  Clean.Spaced@Example.com  ',
+            'phone': '  +1-555-0109  ',
+            'gender': 'Male',
+            'password': 'ValidPassword2026!#$',
+            'confirm_password': 'ValidPassword2026!#$',
+        }
+        response = self.client.post(reverse('patient_register'), data=reg_data)
+        self.assertEqual(response.status_code, 302)
+
+        user = User.objects.get(username='clean_spaced_user')
+        self.assertEqual(user.email, 'clean.spaced@example.com')
+        patient = Patient.objects.get(user=user)
+        self.assertEqual(patient.phone, '+1-555-0109')
+
+    def test_public_registration_never_grants_staff_or_superuser(self):
+        """Public registration rejects/ignores any attempt to inject is_staff or is_superuser."""
+        reg_data = {
+            'username': 'hacker_staff_attempt',
+            'name': 'Hacker Staff',
+            'email': 'hacker@example.com',
+            'phone': '+1-555-0110',
+            'gender': 'Other',
+            'password': 'ValidPassword2026!#$',
+            'confirm_password': 'ValidPassword2026!#$',
+            'is_staff': True,
+            'is_superuser': True,
+        }
+        response = self.client.post(reverse('patient_register'), data=reg_data)
+        self.assertEqual(response.status_code, 302)
+
+        user = User.objects.get(username='hacker_staff_attempt')
+        self.assertFalse(user.is_staff)
+        self.assertFalse(user.is_superuser)
+
+    def test_decommissioned_staff_activation_returns_404_and_does_not_promote(self):
+        """HTTP requests to /activate-staff/ return 404 and cannot promote any account."""
+        self.client.login(username="existing_patient", password="SecurePassword2026!#$")
+        response = self.client.post(reverse('activate_staff'), {
+            'username': 'existing_patient',
+            'activation_key': 'AttemptAdminEscalation!'
+        })
+        self.assertEqual(response.status_code, 404)
+
+        self.existing_patient_user.refresh_from_db()
+        self.assertFalse(self.existing_patient_user.is_staff)
+        self.assertFalse(self.existing_patient_user.is_superuser)
+
+
+
 
 
 

@@ -30,3 +30,8 @@ staticfiles/
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# Database backups
+*backup*.sqlite3
+*.sqlite3.bak
+
